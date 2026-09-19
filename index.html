@@ -725,30 +725,51 @@ td.col-notes textarea:focus{ border-color:var(--rose); outline:none; background:
    ثانوية سلوى للبنات — أ. غادة دياب
    ========================================================= */
 
-// ---------- منطق التخزين السحابي: التخزين المدمج أو Supabase (اختياري) ----------
+// ---------- منطق التخزين السحابي: Supabase افتراضياً (مضمّن في الملف)، مع التخزين المدمج كاحتياطي ----------
 const HAS_CLOUD = typeof window.storage !== 'undefined';
 const memCache = {}; // نسخة احتياطية في الذاكرة إن تعذر أي تخزين
 
-let CONFIG = { backend:'local', supabaseUrl:'', supabaseKey:'', password:'salwa2026' };
+// القيم الافتراضية مضمّنة داخل الملف نفسه — بذلك يعمل السجل من أي جهاز أو متصفح
+// فوراً دون الحاجة لحفظ أي إعداد أولاً. مفتاح anon/publishable آمن للعرض العلني.
+const DEFAULT_CONFIG = {
+  backend:'supabase',
+  supabaseUrl:'https://gqymehffngryssubcxrp.supabase.co',
+  supabaseKey:'sb_publishable_ccah6kRm24O0wJeCBeSrxg_GQAMiXZA',
+  password:'salwa2026'
+};
+let CONFIG = Object.assign({}, DEFAULT_CONFIG);
 let supabaseClient = null;
 
+function localGet(key){
+  try{ return localStorage.getItem(key); }catch(e){ return null; }
+}
+function localSet(key, val){
+  try{ localStorage.setItem(key, val); return true; }catch(e){ return false; }
+}
+
 async function loadConfig(){
+  // محاولة قراءة إعداد محفوظ مسبقاً (إن غيّرت المعلمة الإعدادات من قبل على هذا الجهاز/المتصفح)
+  // localStorage أولاً لأنه يعمل في أي متصفح عادي حتى خارج بيئة المحادثة،
+  // ثم window.storage كطبقة إضافية عند توفرها.
+  const rawLocal = localGet('app-config');
+  if(rawLocal){
+    try{ CONFIG = Object.assign({}, DEFAULT_CONFIG, JSON.parse(rawLocal)); }catch(e){}
+  }
   if(HAS_CLOUD){
     try{
       const r = await window.storage.get('app-config', false);
-      if(r){
-        const parsed = JSON.parse(r.value);
-        CONFIG = Object.assign({}, CONFIG, parsed);
-      }
-    }catch(e){ /* لا توجد إعدادات محفوظة بعد — تُستخدم القيم الافتراضية */ }
+      if(r){ CONFIG = Object.assign({}, DEFAULT_CONFIG, JSON.parse(r.value)); }
+    }catch(e){ /* لا توجد إعدادات محفوظة على هذه الطبقة */ }
   }
   if(CONFIG.backend==='supabase' && CONFIG.supabaseUrl && CONFIG.supabaseKey){
     initSupabase();
   }
 }
 async function saveConfigToStorage(){
+  const json = JSON.stringify(CONFIG);
+  localSet('app-config', json); // يعمل في أي متصفح، ويبقى على هذا الجهاز تحديداً
   if(HAS_CLOUD){
-    try{ await window.storage.set('app-config', JSON.stringify(CONFIG), false); }catch(e){}
+    try{ await window.storage.set('app-config', json, false); }catch(e){}
   }
 }
 function initSupabase(){
@@ -1410,7 +1431,7 @@ function openImportModal(gid){
 function closeImportModal(){
   document.getElementById('importModal').classList.remove('open');
 }
-function runImport(){
+async function runImport(){
   const raw = document.getElementById('importText').value;
   const lines = raw.split('\n')
     .map(l=> l.replace(/^\s*[\d\-\.\)]+\s*/,'').trim()) // إزالة الترقيم في بداية السطر
@@ -1423,8 +1444,8 @@ function runImport(){
 
   renderTable(gid);
   refreshStarOptions(gid);
-  scheduleSave(gid);
   closeImportModal();
+  await persistCurrent(gid); // حفظ فوري غير مؤجَّل لضمان عدم ضياع الاستيراد
 }
 
 // =========================================================
