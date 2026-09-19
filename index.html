@@ -1140,9 +1140,9 @@ function buildGradePage(g){
             <th style="min-width:190px">الاسم ورقم الكشف</th>
             <th style="width:140px">الحضور</th>
             <th style="min-width:190px">المشاركة التفاعلية</th>
+            <th style="width:150px">التطبيق العملي</th>
             <th style="min-width:170px">تسجيل مخالفة</th>
             <th style="min-width:150px">الإجراء المتبع</th>
-            <th style="width:150px">التطبيق العملي</th>
             <th style="width:150px">المشروع</th>
             <th style="min-width:190px">ملاحظات</th>
           </tr>
@@ -1277,6 +1277,11 @@ function renderTable(gid){
           <button class="p-btn p-clear" data-role="clear-badge" data-idx="${idx}">مسح</button>
         </div>
       </td>
+      <td class="col-pract">
+        <select data-role="pract" data-idx="${idx}" class="${doneClass(practVal)}">
+          ${DONE_STATES.map(st=> `<option value="${st.v}" ${st.v===practVal?'selected':''}>${st.label}</option>`).join('')}
+        </select>
+      </td>
       <td class="col-viol">
         <select data-role="viol" data-idx="${idx}" class="${violVal ? 'st-absent':''}">
           <option value="">—</option>
@@ -1286,11 +1291,6 @@ function renderTable(gid){
       <td class="col-action">
         <select data-role="action" data-idx="${idx}">
           ${ACTION_TYPES.map(at=> `<option value="${at.v}" ${at.v===actionVal?'selected':''}>${at.label}</option>`).join('')}
-        </select>
-      </td>
-      <td class="col-pract">
-        <select data-role="pract" data-idx="${idx}" class="${doneClass(practVal)}">
-          ${DONE_STATES.map(st=> `<option value="${st.v}" ${st.v===practVal?'selected':''}>${st.label}</option>`).join('')}
         </select>
       </td>
       <td class="col-proj">
