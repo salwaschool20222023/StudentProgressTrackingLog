@@ -328,7 +328,7 @@ body{
   box-shadow:var(--shadow);
   overflow-x:auto;
 }
-table{ width:100%; min-width:1080px; border-collapse:collapse; }
+table{ width:100%; min-width:1220px; border-collapse:collapse; }
 thead th{
   background:var(--ink);
   color:#fff;
@@ -362,7 +362,7 @@ td.col-name input{
   color:var(--ink);
 }
 td.col-name input:focus{ border-color:var(--line); background:var(--paper); outline:none; }
-td.col-att select, td.col-pract select, td.col-proj select{
+td.col-att select, td.col-pract select, td.col-proj select, td.col-action select{
   width:100%;
   padding:9px 8px 9px 26px;
   border-radius:9px;
@@ -604,7 +604,7 @@ td.col-notes textarea:focus{ border-color:var(--rose); outline:none; background:
   .toolbar{ gap:8px; }
   .btn{ padding:9px 12px; font-size:12px; }
 
-  table{ min-width:900px; }
+  table{ min-width:1020px; }
   thead th{ font-size:11px; padding:9px 6px; }
   tbody td{ font-size:12.5px; padding:6px 6px; }
 
@@ -616,7 +616,7 @@ td.col-notes textarea:focus{ border-color:var(--rose); outline:none; background:
 
 @media (max-width:480px){
   .brand{ flex-direction:column; gap:4px; }
-  table{ min-width:820px; }
+  table{ min-width:940px; }
   .header-titles h1{ font-size:15.5px; }
   .btn{ font-size:11.5px; padding:8px 10px; }
 }
@@ -933,14 +933,23 @@ const ATT_STATES = [
   { v:'late', label:'⏱️ تأخير' },
 ];
 const VIOLATION_TYPES = [
-  { v:'late',    short:'⏰ تأخير',            full:'التأخير' },
-  { v:'supplies',short:'📦 إهمال المستلزمات', full:'إهمال المستلزمات (الكتاب)' },
-  { v:'sheet',   short:'📝 لم تحل الورقة',     full:'عدم حل ورقة العمل' },
+  { v:'late',       short:'⏰ تأخير',            full:'التأخير' },
+  { v:'supplies',   short:'📦 إهمال المستلزمات', full:'إهمال المستلزمات (الكتاب)' },
+  { v:'sheet',      short:'📝 لم تحل الورقة',     full:'عدم حل ورقة العمل' },
+  { v:'talking',    short:'🗣️ تحدث بالحصة',      full:'التحدث داخل الحصة' },
+  { v:'inattentive',short:'👀 عدم انتباه',        full:'عدم الانتباه' },
+  { v:'other',      short:'❗ مخالفة أخرى',       full:'مخالفات أخرى' },
 ];
 const DONE_STATES = [
   { v:'', label:'—' },
   { v:'applied', label:'✅ طبّقت' },
   { v:'not_applied', label:'❌ لم تطبّق' },
+];
+const ACTION_TYPES = [
+  { v:'', label:'— الإجراء المتبع —' },
+  { v:'verbal', label:'🗣️ تنبيه شفوي' },
+  { v:'written', label:'✍️ تعهد خطي' },
+  { v:'guardian', label:'📞 استدعاء ولي أمر' },
 ];
 
 let activeGrade = GRADES[0].id;
@@ -964,7 +973,7 @@ function defaultRoster(){
 }
 
 function emptyDay(){
-  return { week:1, lesson:0, lessonTitle:'', periods:[], star:'', attendance:{}, participation:{}, violations:{}, practicalWork:{}, project:{}, notes:{} };
+  return { week:1, lesson:0, lessonTitle:'', periods:[], star:'', attendance:{}, participation:{}, violations:{}, actionTaken:{}, practicalWork:{}, project:{}, notes:{} };
 }
 
 // ---------- تهيئة الحالة لكل صف ----------
@@ -1017,6 +1026,7 @@ async function loadDayFromCloud(gid, section, date){
   const day = data || emptyDay();
   if(!day.violations) day.violations = {};
   if(!day.practicalWork) day.practicalWork = {};
+  if(!day.actionTaken) day.actionTaken = {};
   if(!day.project) day.project = {};
   if(day.lessonTitle === undefined) day.lessonTitle = '';
   if(!Array.isArray(day.periods)){
@@ -1161,6 +1171,7 @@ function buildGradePage(g){
             <th style="width:140px">الحضور</th>
             <th style="min-width:190px">المشاركة التفاعلية</th>
             <th style="min-width:170px">تسجيل مخالفة</th>
+            <th style="min-width:150px">الإجراء المتبع</th>
             <th style="width:150px">التطبيق العملي</th>
             <th style="width:150px">المشروع</th>
             <th style="min-width:190px">ملاحظات</th>
@@ -1272,6 +1283,7 @@ function renderTable(gid){
     const attVal = day.attendance[idx] || '';
     const partArr = day.participation[idx] || [];
     const violArr = day.violations[idx] || [];
+    const actionVal = day.actionTaken[idx] || '';
     const practVal = day.practicalWork[idx] || '';
     const projVal = day.project[idx] || '';
     const noteVal = day.notes[idx] || '';
@@ -1304,6 +1316,11 @@ function renderTable(gid){
           <button class="v-btn" data-role="add-viol" data-idx="${idx}">إضافة</button>
           <button class="v-btn v-clear" data-role="clear-viol" data-idx="${idx}">مسح</button>
         </div>
+      </td>
+      <td class="col-action">
+        <select data-role="action" data-idx="${idx}">
+          ${ACTION_TYPES.map(at=> `<option value="${at.v}" ${at.v===actionVal?'selected':''}>${at.label}</option>`).join('')}
+        </select>
       </td>
       <td class="col-pract">
         <select data-role="pract" data-idx="${idx}" class="${doneClass(practVal)}">
@@ -1388,6 +1405,13 @@ function renderTable(gid){
       currentDay(gid).violations[i] = [];
       renderViolBadges(i, []);
       updateSummary(gid);
+      scheduleSave(gid);
+    });
+  });
+  tbody.querySelectorAll('[data-role="action"]').forEach(sel=>{
+    sel.addEventListener('change', e=>{
+      const i = Number(e.target.dataset.idx);
+      currentDay(gid).actionTaken[i] = e.target.value;
       scheduleSave(gid);
     });
   });
