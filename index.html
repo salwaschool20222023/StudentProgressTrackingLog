@@ -275,7 +275,7 @@ body{
   box-shadow:var(--shadow);
   overflow-x:auto;
 }
-table{ width:100%; min-width:920px; border-collapse:collapse; }
+table{ width:100%; min-width:1080px; border-collapse:collapse; }
 thead th{
   background:var(--ink);
   color:#fff;
@@ -311,17 +311,33 @@ td.col-name input{
 td.col-name input:focus{ border-color:var(--line); background:var(--paper); outline:none; }
 td.col-att select, td.col-pract select, td.col-proj select{
   width:100%;
-  padding:7px 6px;
-  border-radius:8px;
-  border:1.5px solid var(--line);
-  font-size:13px;
+  padding:9px 8px 9px 26px;
+  border-radius:9px;
+  border:2px solid var(--line);
+  font-size:13.5px;
   font-family:'Tajawal',sans-serif;
-  font-weight:700;
+  font-weight:800;
   cursor:pointer;
+  color:var(--ink-soft);
+  background-color:#fff;
+  -webkit-appearance:none;
+  appearance:none;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0l5 6 5-6z' fill='%234A4E6B'/></svg>");
+  background-repeat:no-repeat;
+  background-position:left 9px center;
 }
-td.col-att select.st-present, td.col-pract select.st-present, td.col-proj select.st-present{ color:var(--present); border-color:var(--present); background:#EAF6EF; }
-td.col-att select.st-absent, td.col-pract select.st-absent, td.col-proj select.st-absent{ color:var(--absent); border-color:var(--absent); background:#FBEAEC; }
-td.col-att select.st-late{ color:var(--late); border-color:var(--late); background:#FCF3E0; }
+td.col-att select.st-present, td.col-pract select.st-present, td.col-proj select.st-present{
+  color:#0E3D2E; border-color:var(--present); background-color:#CDEFDC; font-weight:800;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0l5 6 5-6z' fill='%230E3D2E'/></svg>");
+}
+td.col-att select.st-absent, td.col-pract select.st-absent, td.col-proj select.st-absent{
+  color:#5A1119; border-color:var(--absent); background-color:#F6CDD3; font-weight:800;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0l5 6 5-6z' fill='%235A1119'/></svg>");
+}
+td.col-att select.st-late{
+  color:#6B4E0A; border-color:var(--late); background-color:#FBE7BC; font-weight:800;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0l5 6 5-6z' fill='%236B4E0A'/></svg>");
+}
 
 .participation-cell{ min-width:190px; }
 .p-badges{
@@ -395,18 +411,23 @@ td.col-att select.st-late{ color:var(--late); border-color:var(--late); backgrou
 }
 .sidebar-tool-btn:hover{ background:rgba(255,255,255,.14); }
 
+td.col-notes{ min-width:220px; }
 td.col-notes textarea{
   width:100%;
-  min-height:38px;
+  min-height:56px;
   resize:vertical;
-  border:1px solid var(--line);
+  border:1.5px solid var(--line);
   border-radius:8px;
-  padding:6px 8px;
+  padding:8px 10px;
   font-family:'Tajawal',sans-serif;
-  font-size:12.5px;
+  font-size:13px;
+  line-height:1.6;
   color:var(--ink);
-  background:var(--paper);
+  background:#fff;
+  overflow:hidden;
+  box-sizing:border-box;
 }
+td.col-notes textarea:focus{ border-color:var(--rose); outline:none; background:#fff; }
 
 .summary-strip{
   display:flex;
@@ -530,7 +551,7 @@ td.col-notes textarea{
   .toolbar{ gap:8px; }
   .btn{ padding:9px 12px; font-size:12px; }
 
-  table{ min-width:760px; }
+  table{ min-width:900px; }
   thead th{ font-size:11px; padding:9px 6px; }
   tbody td{ font-size:12.5px; padding:6px 6px; }
 
@@ -542,7 +563,7 @@ td.col-notes textarea{
 
 @media (max-width:480px){
   .brand{ flex-direction:column; gap:4px; }
-  table{ min-width:680px; }
+  table{ min-width:820px; }
   .header-titles h1{ font-size:15.5px; }
   .btn{ font-size:11.5px; padding:8px 10px; }
 }
@@ -820,12 +841,12 @@ const GRADES = [
   { id:'g12sci', name:'الثاني عشر علمي' },
   { id:'g12lit', name:'الثاني عشر أدبي' },
 ];
-const SECTION_COUNTS = { g10:15, g11sci:4, g11lit:4, g12sci:4, g12lit:4 };
+const SECTION_COUNTS = { g10:7, g11sci:4, g11lit:4, g12sci:4, g12lit:4 };
 function sectionsForGrade(gid){
   const n = SECTION_COUNTS[gid] || 4;
   return Array.from({length:n}, (_,i)=> `شعبة ${i+1}`);
 }
-const ROSTER_SIZE = 30;
+const ROSTER_SIZE = 25;
 const LESSONS = Array.from({length:15}, (_,i)=> `الأسبوع ${i+1}`);
 const ATT_STATES = [
   { v:'', label:'—' },
@@ -900,7 +921,9 @@ const datesIndexKey = (gid, section) => `dates:${gid}:${section}`;
 async function loadRosterFromCloud(gid, section){
   const data = await cloudGet(rosterKey(gid, section));
   if(data && Array.isArray(data)){
-    state[gid].rosterBySection[section] = data;
+    let arr = data.slice(0, ROSTER_SIZE);
+    while(arr.length < ROSTER_SIZE) arr.push('');
+    state[gid].rosterBySection[section] = arr;
   }
 }
 async function loadDayFromCloud(gid, section, date){
@@ -918,10 +941,17 @@ async function loadDatesIndex(gid, section){
   state[gid].datesBySection[section] = (data && Array.isArray(data)) ? data : [];
 }
 
-let saveTimer = null;
+const saveTimers = {}; // gid -> timeout id (مؤقت مستقل لكل صف حتى لا يُفقد أي تعديل عند التنقل السريع)
 function scheduleSave(gid){
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(()=> persistCurrent(gid), 450);
+  if(saveTimers[gid]) clearTimeout(saveTimers[gid]);
+  saveTimers[gid] = setTimeout(()=>{ saveTimers[gid] = null; persistCurrent(gid); }, 450);
+}
+async function flushSave(gid){
+  if(saveTimers[gid]){
+    clearTimeout(saveTimers[gid]);
+    saveTimers[gid] = null;
+    await persistCurrent(gid);
+  }
 }
 async function persistCurrent(gid){
   const s = state[gid];
@@ -946,7 +976,7 @@ function buildSidebar(){
     const btn = document.createElement('button');
     btn.className = 'nav-btn' + (g.id===activeGrade ? ' active':'');
     btn.id = 'nav-'+g.id;
-    btn.innerHTML = `<span>${g.name}</span><span class="tag">30</span>`;
+    btn.innerHTML = `<span>${g.name}</span><span class="tag">${ROSTER_SIZE}</span>`;
     btn.onclick = ()=> switchGrade(g.id);
     wrap.appendChild(btn);
   });
@@ -1030,11 +1060,11 @@ function buildGradePage(g){
           <tr>
             <th style="width:34px">#</th>
             <th style="min-width:190px">الاسم ورقم الكشف</th>
-            <th style="width:120px">الحضور</th>
+            <th style="width:140px">الحضور</th>
             <th style="min-width:190px">المشاركة التفاعلية</th>
             <th style="min-width:170px">تسجيل مخالفة</th>
-            <th style="width:120px">التطبيق العملي</th>
-            <th style="width:120px">المشروع</th>
+            <th style="width:150px">التطبيق العملي</th>
+            <th style="width:150px">المشروع</th>
             <th style="min-width:190px">ملاحظات</th>
           </tr>
         </thead>
@@ -1052,11 +1082,13 @@ function buildGradePage(g){
   document.getElementById(`sel-date-${g.id}`).value = todayStr();
 
   // ربط الأحداث
-  document.getElementById(`sel-section-${g.id}`).addEventListener('change', e=>{
+  document.getElementById(`sel-section-${g.id}`).addEventListener('change', async e=>{
+    await flushSave(g.id); // احفظي أي تعديل معلّق على الشعبة القديمة أولاً
     state[g.id].section = e.target.value;
     onContextChange(g.id);
   });
-  document.getElementById(`sel-date-${g.id}`).addEventListener('change', e=>{
+  document.getElementById(`sel-date-${g.id}`).addEventListener('change', async e=>{
+    await flushSave(g.id); // احفظي أي تعديل معلّق على التاريخ القديم أولاً
     state[g.id].date = e.target.value;
     onContextChange(g.id);
   });
@@ -1191,9 +1223,11 @@ function renderTable(gid){
     });
   });
   tbody.querySelectorAll('[data-role="note"]').forEach(ta=>{
+    autoGrowNote(ta);
     ta.addEventListener('input', e=>{
       const i = Number(e.target.dataset.idx);
       currentDay(gid).notes[i] = e.target.value;
+      autoGrowNote(e.target);
       scheduleSave(gid);
     });
   });
@@ -1264,6 +1298,10 @@ function doneClass(v){
   if(v==='applied') return 'st-present';
   if(v==='not_applied') return 'st-absent';
   return '';
+}
+function autoGrowNote(ta){
+  ta.style.height = 'auto';
+  ta.style.height = Math.max(ta.scrollHeight, 56) + 'px';
 }
 
 function violLabel(v){
@@ -1345,11 +1383,12 @@ document.addEventListener('click', e=>{
   }
 });
 
-function addNewSection(gid){
+async function addNewSection(gid){
   const name = prompt('اسم الشعبة الجديدة (مثال: شعبة 5):');
   if(!name) return;
   const sel = document.getElementById(`sel-section-${gid}`);
   if([...sel.options].some(o=> o.value===name)){ alert('هذه الشعبة موجودة بالفعل'); return; }
+  await flushSave(gid);
   const opt = document.createElement('option');
   opt.value = name; opt.textContent = name;
   sel.appendChild(opt);
@@ -1562,6 +1601,16 @@ async function boot(){
   });
 }
 boot();
+
+// شبكة أمان إضافية: احفظي أي تعديل معلّق فوراً عند إخفاء الصفحة أو إغلاقها
+document.addEventListener('visibilitychange', ()=>{
+  if(document.hidden){
+    GRADES.forEach(g=> flushSave(g.id));
+  }
+});
+window.addEventListener('beforeunload', ()=>{
+  GRADES.forEach(g=> { if(saveTimers[g.id]) persistCurrent(g.id); });
+});
 
 </script>
 </body>
