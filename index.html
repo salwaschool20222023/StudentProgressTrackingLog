@@ -182,7 +182,7 @@ body{
 
 .controls-row{
   display:grid;
-  grid-template-columns:repeat(3,1fr);
+  grid-template-columns:repeat(4,1fr);
   gap:14px;
 }
 @media (max-width:900px){ .controls-row{ grid-template-columns:repeat(2,1fr);} }
@@ -205,6 +205,59 @@ body{
   color:var(--ink);
 }
 .field select:focus, .field input:focus{ outline:2px solid var(--rose); outline-offset:1px; }
+
+.date-field{ position:relative; width:100%; }
+.date-field .date-display{
+  width:100%;
+  padding:10px 12px;
+  border-radius:10px;
+  border:1.5px solid var(--line);
+  background:var(--paper);
+  font-family:'Tajawal',sans-serif;
+  font-size:13.5px;
+  font-weight:700;
+  color:var(--ink);
+  direction:rtl;
+  text-align:right;
+  cursor:pointer;
+}
+.date-field .date-native-hidden{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  opacity:0;
+  cursor:pointer;
+  border:none;
+  padding:0;
+  margin:0;
+}
+.date-field:focus-within .date-display{ outline:2px solid var(--rose); outline-offset:1px; }
+
+.period-chips{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+}
+.period-chip{
+  min-width:34px;
+  height:34px;
+  padding:0 8px;
+  border-radius:9px;
+  border:1.5px solid var(--line);
+  background:var(--paper);
+  color:var(--ink-soft);
+  font-family:'Tajawal',sans-serif;
+  font-weight:800;
+  font-size:13.5px;
+  cursor:pointer;
+}
+.period-chip:hover{ border-color:var(--rose); }
+.period-chip.active{
+  background:var(--rose);
+  border-color:var(--rose);
+  color:#fff;
+}
 
 /* Star of the lesson */
 .star-bar{
@@ -659,7 +712,10 @@ td.col-notes textarea:focus{ border-color:var(--rose); outline:none; background:
     </div>
     <div class="modal-actions" style="justify-content:space-between;">
       <button class="btn btn-secondary" onclick="closeStatsModal()">إغلاق</button>
-      <button class="btn btn-primary" onclick="runStats()">عرض النتيجة</button>
+      <div style="display:flex; gap:8px;">
+        <button class="btn btn-secondary" onclick="printStatsResult()">🖨️ طباعة</button>
+        <button class="btn btn-primary" onclick="runStats()">عرض النتيجة</button>
+      </div>
     </div>
     <div id="statsResult"></div>
   </div>
@@ -869,6 +925,7 @@ function sectionsForGrade(gid){
 }
 const ROSTER_SIZE = 25;
 const LESSONS = Array.from({length:15}, (_,i)=> `الأسبوع ${i+1}`);
+const PERIODS = Array.from({length:7}, (_,i)=> i+1);
 const ATT_STATES = [
   { v:'', label:'—' },
   { v:'present', label:'✅ حضور' },
@@ -894,13 +951,20 @@ function todayStr(){
   const d = new Date();
   return d.toISOString().slice(0,10);
 }
+function formatDateDMY(iso){
+  if(!iso) return '';
+  const parts = iso.split('-');
+  if(parts.length !== 3) return iso;
+  const [y,m,d] = parts;
+  return `${Number(d)}-${Number(m)}-${y}`;
+}
 
 function defaultRoster(){
   return Array.from({length:ROSTER_SIZE}, ()=> '');
 }
 
 function emptyDay(){
-  return { week:1, lesson:0, lessonTitle:'', star:'', attendance:{}, participation:{}, violations:{}, practicalWork:{}, project:{}, notes:{} };
+  return { week:1, lesson:0, lessonTitle:'', periods:[], star:'', attendance:{}, participation:{}, violations:{}, practicalWork:{}, project:{}, notes:{} };
 }
 
 // ---------- تهيئة الحالة لكل صف ----------
@@ -955,6 +1019,10 @@ async function loadDayFromCloud(gid, section, date){
   if(!day.practicalWork) day.practicalWork = {};
   if(!day.project) day.project = {};
   if(day.lessonTitle === undefined) day.lessonTitle = '';
+  if(!Array.isArray(day.periods)){
+    day.periods = day.period ? [day.period] : [];
+  }
+  delete day.period;
   state[gid].dayBySection[key] = day;
 }
 async function loadDatesIndex(gid, section){
@@ -1042,7 +1110,16 @@ function buildGradePage(g){
         </div>
         <div class="field">
           <label>التاريخ</label>
-          <input type="date" id="sel-date-${g.id}">
+          <div class="date-field">
+            <input type="text" id="sel-date-display-${g.id}" class="date-display" readonly dir="rtl" placeholder="اختاري التاريخ">
+            <input type="date" id="sel-date-${g.id}" class="date-native-hidden" aria-label="التاريخ">
+          </div>
+        </div>
+        <div class="field">
+          <label>الحصة (يمكن اختيار أكثر من حصة)</label>
+          <div class="period-chips" id="periods-${g.id}">
+            ${PERIODS.map(p=> `<button type="button" class="period-chip" data-grade="${g.id}" data-period="${p}">${p}</button>`).join('')}
+          </div>
         </div>
         <div class="field">
           <label>الدرس</label>
@@ -1101,6 +1178,7 @@ function buildGradePage(g){
   fillSelect(`sel-section-${g.id}`, sectionsForGrade(g.id).map(s=>({v:s,l:s})));
   fillSelect(`sel-lesson-${g.id}`, LESSONS.map((l,i)=>({v:i, l})));
   document.getElementById(`sel-date-${g.id}`).value = todayStr();
+  document.getElementById(`sel-date-display-${g.id}`).value = formatDateDMY(todayStr());
 
   // ربط الأحداث
   document.getElementById(`sel-section-${g.id}`).addEventListener('change', async e=>{
@@ -1111,7 +1189,20 @@ function buildGradePage(g){
   document.getElementById(`sel-date-${g.id}`).addEventListener('change', async e=>{
     await flushSave(g.id); // احفظي أي تعديل معلّق على التاريخ القديم أولاً
     state[g.id].date = e.target.value;
+    document.getElementById(`sel-date-display-${g.id}`).value = formatDateDMY(e.target.value);
     onContextChange(g.id);
+  });
+  document.querySelectorAll(`#periods-${g.id} .period-chip`).forEach(chip=>{
+    chip.addEventListener('click', e=>{
+      const p = Number(e.currentTarget.dataset.period);
+      const day = currentDay(g.id);
+      if(!Array.isArray(day.periods)) day.periods = [];
+      const idx = day.periods.indexOf(p);
+      if(idx === -1){ day.periods.push(p); day.periods.sort((a,b)=>a-b); }
+      else{ day.periods.splice(idx, 1); }
+      e.currentTarget.classList.toggle('active', idx === -1);
+      scheduleSave(g.id);
+    });
   });
   document.getElementById(`sel-lesson-${g.id}`).addEventListener('change', e=>{
     currentDay(g.id).lesson = Number(e.target.value);
@@ -1147,6 +1238,11 @@ function syncHeaderControls(gid){
   const day = currentDay(gid);
   document.getElementById(`sel-section-${gid}`).value = s.section;
   document.getElementById(`sel-date-${gid}`).value = s.date;
+  document.getElementById(`sel-date-display-${gid}`).value = formatDateDMY(s.date);
+  const activePeriods = new Set(day.periods || []);
+  document.querySelectorAll(`#periods-${gid} .period-chip`).forEach(chip=>{
+    chip.classList.toggle('active', activePeriods.has(Number(chip.dataset.period)));
+  });
   document.getElementById(`sel-lesson-${gid}`).value = day.lesson;
   document.getElementById(`sel-lessontitle-${gid}`).value = day.lessonTitle || '';
   document.getElementById(`sel-star-${gid}`).value = day.star || '';
@@ -1460,6 +1556,7 @@ function openStatsModal(gid){
   const roster = currentRoster(gid);
   fillSelect('statStudent', roster.map((n,i)=> ({v:i, l: n || `طالبة رقم ${i+1}`})));
   document.getElementById('statsResult').innerHTML = '';
+  lastStatsMeta = null;
   document.getElementById('statsModal').classList.add('open');
 }
 function closeStatsModal(){
@@ -1542,6 +1639,8 @@ async function computeStatsAll(gid, section, periodType, studentIdx){
   );
 }
 
+let lastStatsMeta = null;
+
 async function runStats(){
   const gid = statsTargetGrade;
   const section = state[gid].section;
@@ -1550,6 +1649,7 @@ async function runStats(){
   const period = document.getElementById('statPeriod').value;
   const studentIdx = scope==='student' ? Number(document.getElementById('statStudent').value) : null;
   const periodLabel = { day:'اليوم الحالي', month:'الشهر الحالي', term:'الفصل الدراسي كاملاً' }[period];
+  const gradeName = (GRADES.find(g=> g.id===gid) || {}).name || '';
 
   document.getElementById('statsResult').innerHTML = '<p>جارٍ الحساب...</p>';
 
@@ -1569,6 +1669,7 @@ async function runStats(){
     });
     html += '</table></div>';
     document.getElementById('statsResult').innerHTML = html;
+    lastStatsMeta = { gradeName, section, periodLabel, metricLabel:'كل المؤشرات معاً' };
     return;
   }
 
@@ -1589,6 +1690,47 @@ async function runStats(){
   });
   html += '</table>';
   document.getElementById('statsResult').innerHTML = html;
+  lastStatsMeta = { gradeName, section, periodLabel, metricLabel };
+}
+
+function printStatsResult(){
+  const resultEl = document.getElementById('statsResult');
+  if(!resultEl || !resultEl.innerHTML.trim() || !lastStatsMeta){
+    alert('اضغطي "عرض النتيجة" أولاً قبل الطباعة');
+    return;
+  }
+  const win = window.open('', '_blank');
+  if(!win){
+    alert('يبدو أن المتصفح منع فتح نافذة جديدة — يرجى السماح بالنوافذ المنبثقة لهذا الموقع ثم إعادة المحاولة');
+    return;
+  }
+  const m = lastStatsMeta;
+  const todayLabel = formatDateDMY(todayStr());
+  win.document.write(`<!DOCTYPE html>
+<html lang="ar" dir="rtl"><head><meta charset="UTF-8">
+<title>إحصائية المتابعة — ${m.gradeName}</title>
+<style>
+  :root{ --line:#E4DCD3; --ink:#1B1F3B; --ink-soft:#4A4E6B; --rose-deep:#8C2C48; --paper-dim:#F1ECE6; }
+  *{ box-sizing:border-box; }
+  body{ font-family:'Tajawal',Arial,sans-serif; padding:28px; color:var(--ink); direction:rtl; }
+  h1{ font-family:'Almarai',sans-serif; font-size:19px; margin:0 0 4px; }
+  p.meta{ color:var(--ink-soft); font-size:12.5px; margin:2px 0 18px; }
+  .hint-box{ background:var(--paper-dim); border:1px solid var(--line); border-radius:10px; padding:10px 14px; font-size:12.5px; color:var(--ink-soft); margin-bottom:6px; }
+  table{ width:100%; border-collapse:collapse; }
+  th{ background:var(--ink); color:#fff; padding:8px 6px; text-align:center; }
+  @media print{ .no-print{ display:none; } }
+  .no-print{ margin-top:18px; }
+  .no-print button{ font-family:'Tajawal',Arial,sans-serif; font-size:13px; font-weight:700; padding:9px 16px; border-radius:8px; border:none; background:var(--rose-deep); color:#fff; cursor:pointer; }
+</style></head>
+<body>
+  <h1>سجل متابعة الطالبات — ثانوية سلوى للبنات</h1>
+  <p class="meta">أ. غادة دياب (قسم الحاسوب) — ${m.gradeName} — الشعبة: ${m.section} — المؤشر: ${m.metricLabel} — الفترة: ${m.periodLabel} — تاريخ الطباعة: ${todayLabel}</p>
+  ${resultEl.innerHTML}
+  <div class="no-print"><button onclick="window.print()">🖨️ طباعة الآن</button></div>
+</body></html>`);
+  win.document.close();
+  win.focus();
+  setTimeout(()=>{ try{ win.print(); }catch(e){} }, 400);
 }
 
 document.getElementById('statScope').addEventListener('change', e=>{
