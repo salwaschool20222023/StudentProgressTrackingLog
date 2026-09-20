@@ -708,6 +708,11 @@ td.col-notes textarea:focus{ border-color:var(--rose); outline:none; background:
       <label>مفتاح anon public</label>
       <input type="text" id="cfgKey" placeholder="eyJhbGciOi...">
     </div>
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
+      <button type="button" class="btn btn-secondary" onclick="testSupabaseConnection()">🔍 اختبار الاتصال الآن</button>
+      <button type="button" class="btn btn-ghost" onclick="listSavedKeys()">📋 عرض كل البيانات المحفوظة</button>
+    </div>
+    <div id="cfgTestResult" style="font-size:12.5px; margin-bottom:10px;"></div>
     <div class="field" style="margin-bottom:10px;">
       <label>كلمة السر للدخول إلى السجل (اتركيها فارغة لإلغاء الحماية)</label>
       <input type="text" id="cfgPassword" placeholder="مثال: salwa2026">
@@ -722,6 +727,7 @@ td.col-notes textarea:focus{ border-color:var(--rose); outline:none; background:
       <ol start="3">
         <li>من Project Settings → API انسخي "Project URL" و"anon public" والصقيهما أعلاه، ثم اختاري "Supabase" من قائمة نوع التخزين واضغطي حفظ.</li>
       </ol>
+      <p style="margin-top:8px;"><b>ملاحظة</b>: عند فتح السجل من جهاز آخر، تأكدي من اختيار نفس <b>الصف والشعبة والتاريخ</b> اللذين حفظتِ عليهما البيانات — فكل شعبة وتاريخ لهما بيانات منفصلة.</p>
     </div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeSettingsModal()">إلغاء</button>
@@ -855,6 +861,84 @@ async function saveSettings(){
   if(CONFIG.backend==='supabase'){ initSupabase(); }
   closeSettingsModal();
   setSaveStatus(CONFIG.backend==='supabase' ? (supabaseClient ? 'مفعّل: Supabase' : 'تعذّر الاتصال بـ Supabase') : 'محفوظ سحابياً');
+}
+
+async function testSupabaseConnection(){
+  const resultEl = document.getElementById('cfgTestResult');
+  const url = document.getElementById('cfgUrl').value.trim();
+  const key = document.getElementById('cfgKey').value.trim();
+  resultEl.style.color = 'var(--ink-soft)';
+  resultEl.textContent = 'جارٍ الاختبار...';
+
+  if(!url || !key){
+    resultEl.style.color = 'var(--absent)';
+    resultEl.textContent = 'يرجى إدخال الرابط والمفتاح أولاً';
+    return;
+  }
+  if(!window.supabase){
+    resultEl.style.color = 'var(--absent)';
+    resultEl.textContent = 'مكتبة Supabase لم تُحمَّل — تأكدي من اتصالك بالإنترنت وأعيدي المحاولة';
+    return;
+  }
+
+  let testClient;
+  try{ testClient = window.supabase.createClient(url, key); }
+  catch(e){
+    resultEl.style.color = 'var(--absent)';
+    resultEl.textContent = 'الرابط أو المفتاح بصيغة غير صحيحة: ' + e.message;
+    return;
+  }
+
+  try{
+    const testKey = '__connection_test__';
+    const { error: writeErr } = await testClient.from('app_storage').upsert({ key: testKey, value: { ts: Date.now() } });
+    if(writeErr){
+      resultEl.style.color = 'var(--absent)';
+      resultEl.textContent = '❌ فشلت الكتابة: ' + writeErr.message;
+      return;
+    }
+    const { data, error: readErr } = await testClient.from('app_storage').select('value').eq('key', testKey).maybeSingle();
+    if(readErr || !data){
+      resultEl.style.color = 'var(--absent)';
+      resultEl.textContent = '❌ فشلت القراءة بعد الكتابة: ' + (readErr ? readErr.message : 'لا توجد بيانات');
+      return;
+    }
+    resultEl.style.color = 'var(--present)';
+    resultEl.textContent = '✅ الاتصال يعمل — تمّت الكتابة والقراءة من Supabase بنجاح';
+  }catch(e){
+    resultEl.style.color = 'var(--absent)';
+    resultEl.textContent = '❌ خطأ غير متوقع: ' + e.message;
+  }
+}
+
+async function listSavedKeys(){
+  const resultEl = document.getElementById('cfgTestResult');
+  if(CONFIG.backend !== 'supabase' || !supabaseClient){
+    resultEl.style.color = 'var(--absent)';
+    resultEl.textContent = 'فعّلي "Supabase" واحفظي الإعدادات أولاً لعرض البيانات المحفوظة';
+    return;
+  }
+  resultEl.style.color = 'var(--ink-soft)';
+  resultEl.textContent = 'جارٍ الجلب...';
+  try{
+    const { data, error } = await supabaseClient.from('app_storage').select('key').order('key');
+    if(error){
+      resultEl.style.color = 'var(--absent)';
+      resultEl.textContent = '❌ خطأ: ' + error.message;
+      return;
+    }
+    const keys = (data || []).map(r=> r.key).filter(k=> k !== '__connection_test__' && k !== 'app-config');
+    resultEl.style.color = 'var(--ink)';
+    if(!keys.length){
+      resultEl.textContent = 'لا توجد أي بيانات محفوظة بعد على هذا المشروع';
+    }else{
+      resultEl.innerHTML = `عدد العناصر المحفوظة: <b>${keys.length}</b>` +
+        `<div style="max-height:130px;overflow:auto;font-size:11px;direction:ltr;text-align:left;background:var(--paper-dim);padding:8px;border-radius:8px;margin-top:6px;">${keys.join('<br>')}</div>`;
+    }
+  }catch(e){
+    resultEl.style.color = 'var(--absent)';
+    resultEl.textContent = '❌ خطأ: ' + e.message;
+  }
 }
 
 function showLockScreenIfNeeded(){
