@@ -974,6 +974,17 @@ function sectionsForGrade(gid){
   const n = SECTION_COUNTS[gid] || 4;
   return Array.from({length:n}, (_,i)=> `شعبة ${i+1}`);
 }
+// الشعب الإضافية التي تُضاف يدوياً عبر "+ شعبة جديدة" — يجب حفظها سحابياً
+// وإلا تختفي عند إعادة فتح السجل لأن القائمة الأساسية ثابتة في الكود.
+const extraSections = {}; // gid -> [أسماء الشعب الإضافية]
+function extraSectionsKey(gid){ return `extra-sections:${gid}`; }
+async function loadExtraSectionsFor(gid){
+  const data = await cloudGet(extraSectionsKey(gid));
+  extraSections[gid] = (data && Array.isArray(data)) ? data : [];
+}
+function allSectionsForGrade(gid){
+  return sectionsForGrade(gid).concat(extraSections[gid] || []);
+}
 const ROSTER_SIZE = 25;
 const LESSONS = Array.from({length:15}, (_,i)=> `الأسبوع ${i+1}`);
 const PERIODS = Array.from({length:7}, (_,i)=> i+1);
@@ -1029,7 +1040,7 @@ function emptyDay(){
 
 // ---------- تهيئة الحالة لكل صف ----------
 function initGradeState(gid){
-  const sections = sectionsForGrade(gid);
+  const sections = allSectionsForGrade(gid);
   state[gid] = {
     section: sections[0],
     date: todayStr(),
@@ -1240,7 +1251,7 @@ function buildGradePage(g){
   document.getElementById('mainArea').appendChild(page);
 
   // تعبئة القوائم المنسدلة الثابتة
-  fillSelect(`sel-section-${g.id}`, sectionsForGrade(g.id).map(s=>({v:s,l:s})));
+  fillSelect(`sel-section-${g.id}`, allSectionsForGrade(g.id).map(s=>({v:s,l:s})));
   fillSelect(`sel-lesson-${g.id}`, LESSONS.map((l,i)=>({v:i, l})));
   document.getElementById(`sel-date-${g.id}`).value = todayStr();
   document.getElementById(`sel-date-display-${g.id}`).value = formatDateDMY(todayStr());
@@ -1564,6 +1575,9 @@ async function addNewSection(gid){
   sel.value = name;
   state[gid].rosterBySection[name] = defaultRoster();
   state[gid].section = name;
+  extraSections[gid] = extraSections[gid] || [];
+  extraSections[gid].push(name);
+  await cloudSet(extraSectionsKey(gid), extraSections[gid]); // حفظ فوري حتى تبقى الشعبة الجديدة ظاهرة عند إعادة الفتح
   onContextChange(gid);
 }
 
@@ -1797,6 +1811,7 @@ document.getElementById('schoolLogo').src = 'data:image/jpeg;base64,' + LOGOS.sc
 async function boot(){
   await loadConfig();
   showLockScreenIfNeeded();
+  for(const g of GRADES){ await loadExtraSectionsFor(g.id); }
   GRADES.forEach(g=> initGradeState(g.id));
   buildSidebar();
   GRADES.forEach(g=> buildGradePage(g));
