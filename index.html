@@ -279,15 +279,51 @@ body{
   color:#8A6412;
   white-space:nowrap;
 }
-.star-bar select{
+.podium{
   flex:1;
-  min-width:200px;
-  padding:10px 12px;
-  border-radius:10px;
-  border:1.5px solid #EFD9A0;
+  min-width:220px;
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+.podium-item{
+  display:flex;
+  align-items:center;
+  gap:8px;
   background:#fff;
+  border:1.5px solid #EFD9A0;
+  border-radius:12px;
+  padding:8px 14px;
   font-size:14px;
+  font-weight:700;
+  color:var(--ink);
+}
+.podium-item .medal{ font-size:22px; line-height:1; }
+.podium-item .rank{ font-size:11px; color:#8A6412; font-weight:500; display:block; }
+.podium-item .fire-count{ font-size:12px; color:var(--rose-deep); font-weight:700; }
+.podium-hint{ font-size:13px; color:#8A6412; }
+
+/* الاستئذان */
+.perm-cell{ min-width:200px; }
+.perm-times{ display:flex; gap:6px; margin-top:6px; }
+.perm-times label{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  font-size:10.5px;
+  color:var(--ink-soft);
+  text-align:right;
+}
+.perm-times input[type=time]{
+  width:100%;
+  padding:5px 4px;
+  border:1.5px solid var(--line);
+  border-radius:8px;
   font-family:'Tajawal',sans-serif;
+  font-size:12px;
+  background:#fff;
+  color:var(--ink);
 }
 
 /* Toolbar */
@@ -328,7 +364,7 @@ body{
   box-shadow:var(--shadow);
   overflow-x:auto;
 }
-table{ width:100%; min-width:1220px; border-collapse:collapse; }
+table{ width:100%; min-width:1430px; border-collapse:collapse; }
 thead th{
   background:var(--ink);
   color:#fff;
@@ -362,7 +398,7 @@ td.col-name input{
   color:var(--ink);
 }
 td.col-name input:focus{ border-color:var(--line); background:var(--paper); outline:none; }
-td.col-att select, td.col-pract select, td.col-proj select, td.col-action select, td.col-viol select{
+td.col-att select, td.col-pract select, td.col-proj select, td.col-action select, td.col-viol select, td.col-perm select{
   width:100%;
   padding:9px 8px 9px 26px;
   border-radius:9px;
@@ -571,7 +607,7 @@ td.col-notes textarea:focus{ border-color:var(--rose); outline:none; background:
   .toolbar{ gap:8px; }
   .btn{ padding:9px 12px; font-size:12px; }
 
-  table{ min-width:1020px; }
+  table{ min-width:1230px; }
   thead th{ font-size:11px; padding:9px 6px; }
   tbody td{ font-size:12.5px; padding:6px 6px; }
 
@@ -583,7 +619,7 @@ td.col-notes textarea:focus{ border-color:var(--rose); outline:none; background:
 
 @media (max-width:480px){
   .brand{ flex-direction:column; gap:4px; }
-  table{ min-width:940px; }
+  table{ min-width:1150px; }
   .header-titles h1{ font-size:15.5px; }
   .btn{ font-size:11.5px; padding:8px 10px; }
 }
@@ -1007,6 +1043,12 @@ const DONE_STATES = [
   { v:'applied', label:'✅ طبّقت' },
   { v:'not_applied', label:'❌ لم تطبّق' },
 ];
+const PERMISSION_TYPES = [
+  { v:'', label:'— نوع الاستئذان —' },
+  { v:'bathroom', label:'🚻 الحمام' },
+  { v:'admin', label:'🏢 الإدارة' },
+  { v:'leave', label:'🚪 الخروج' },
+];
 const ACTION_TYPES = [
   { v:'', label:'— الإجراء المتبع —' },
   { v:'verbal', label:'🗣️ تنبيه شفوي' },
@@ -1035,7 +1077,7 @@ function defaultRoster(){
 }
 
 function emptyDay(){
-  return { week:1, lesson:0, lessonTitle:'', periods:[], star:'', attendance:{}, participation:{}, violations:{}, actionTaken:{}, practicalWork:{}, project:{}, notes:{} };
+  return { week:1, lesson:0, lessonTitle:'', periods:[], stars:[], permissions:{}, attendance:{}, participation:{}, violations:{}, actionTaken:{}, practicalWork:{}, project:{}, notes:{} };
 }
 
 // ---------- تهيئة الحالة لكل صف ----------
@@ -1092,6 +1134,12 @@ async function loadDayFromCloud(gid, section, date){
   });
   if(!day.practicalWork) day.practicalWork = {};
   if(!day.actionTaken) day.actionTaken = {};
+  if(!day.permissions) day.permissions = {};
+  if(!Array.isArray(day.stars)){
+    // ترحيل الاختيار اليدوي القديم (طالبة واحدة) إلى القائمة الجديدة
+    day.stars = (day.star !== undefined && day.star !== '' && day.star !== null) ? [Number(day.star)] : [];
+  }
+  delete day.star;
   if(!day.project) day.project = {};
   if(day.lessonTitle === undefined) day.lessonTitle = '';
   if(!Array.isArray(day.periods)){
@@ -1209,8 +1257,9 @@ function buildGradePage(g){
 
       <div class="star-bar">
         <span class="star-icon">🌟</span>
-        <span class="star-label">طالبة الحصة المتميزة</span>
-        <select id="sel-star-${g.id}"></select>
+        <span class="star-label">الطالبات المتميزات</span>
+        <button type="button" class="btn btn-rose" data-action="pick-stars" data-grade="${g.id}">🏅 اعرفي المتميزات</button>
+        <div class="podium" id="podium-${g.id}"></div>
       </div>
     </div>
 
@@ -1239,6 +1288,7 @@ function buildGradePage(g){
             <th style="min-width:170px">تسجيل مخالفة</th>
             <th style="min-width:150px">الإجراء المتبع</th>
             <th style="width:150px">المشروع</th>
+            <th style="min-width:200px">الاستئذان</th>
             <th style="min-width:190px">ملاحظات</th>
           </tr>
         </thead>
@@ -1288,10 +1338,6 @@ function buildGradePage(g){
     currentDay(g.id).lessonTitle = e.target.value;
     scheduleSave(g.id);
   });
-  document.getElementById(`sel-star-${g.id}`).addEventListener('change', e=>{
-    currentDay(g.id).star = e.target.value;
-    scheduleSave(g.id);
-  });
 }
 
 function fillSelect(id, items){
@@ -1321,16 +1367,58 @@ function syncHeaderControls(gid){
   });
   document.getElementById(`sel-lesson-${gid}`).value = day.lesson;
   document.getElementById(`sel-lessontitle-${gid}`).value = day.lessonTitle || '';
-  document.getElementById(`sel-star-${gid}`).value = day.star || '';
+  renderPodium(gid);
 }
 
+// يُستدعى من عدة أماكن (تغيير الأسماء، الاستيراد، التنقل) — يعيد رسم منصة المتميزات
 function refreshStarOptions(gid){
-  const roster = currentRoster(gid);
+  renderPodium(gid);
+}
+
+function countBadges(day, i, badge){
+  return ((day.participation && day.participation[i]) || []).filter(b=> b===badge).length;
+}
+
+// اختيار المتميزات: المركز الأول لصاحبة أكثر رموز 🔥 (التفاعل القوي)، ثم الثانية، ثم الثالثة.
+// عند التعادل يُفضَّل الأعلى في 🏆 ثم ⭐، ثم ترتيب الكشف.
+function pickStars(gid){
   const day = currentDay(gid);
-  const opts = [{v:'', l:'— اختاري طالبة —'}]
-    .concat(roster.map((n,i)=> ({ v:String(i), l: n ? n : `طالبة رقم ${i+1}` })));
-  fillSelect(`sel-star-${gid}`, opts);
-  document.getElementById(`sel-star-${gid}`).value = day.star || '';
+  const roster = currentRoster(gid);
+  const ranked = roster.map((_,i)=> ({
+      i,
+      fire: countBadges(day, i, '🔥'),
+      trophy: countBadges(day, i, '🏆'),
+      star: countBadges(day, i, '⭐'),
+    }))
+    .filter(r=> r.fire > 0)
+    .sort((a,b)=> b.fire-a.fire || b.trophy-a.trophy || b.star-a.star || a.i-b.i)
+    .slice(0,3);
+  day.stars = ranked.map(r=> r.i);
+  renderPodium(gid, ranked.length===0);
+  scheduleSave(gid);
+}
+
+function renderPodium(gid, noneFound){
+  const el = document.getElementById(`podium-${gid}`);
+  if(!el) return;
+  const day = currentDay(gid);
+  const roster = currentRoster(gid);
+  const stars = Array.isArray(day.stars) ? day.stars : [];
+  if(!stars.length){
+    el.innerHTML = `<span class="podium-hint">${noneFound
+      ? 'لا يوجد تفاعل قوي 🔥 مسجّل بعد في هذه الحصة'
+      : 'اضغطي الزر لاختيار المتميزات حسب التفاعل القوي 🔥'}</span>`;
+    return;
+  }
+  const medals = ['🥇','🥈','🥉'];
+  const ranks = ['المركز الأول','المركز الثاني','المركز الثالث'];
+  el.innerHTML = stars.map((idx, pos)=>{
+    const name = roster[idx] || `طالبة رقم ${idx+1}`;
+    const fire = countBadges(day, idx, '🔥');
+    return `<div class="podium-item"><span class="medal">${medals[pos]}</span>` +
+      `<span><span class="rank">${ranks[pos]}</span>${escapeHtml(name)}</span>` +
+      (fire ? `<span class="fire-count">${fire}🔥</span>` : '') + `</div>`;
+  }).join('');
 }
 
 // =========================================================
@@ -1349,6 +1437,7 @@ function renderTable(gid){
     const partArr = day.participation[idx] || [];
     const violVal = day.violations[idx] || '';
     const actionVal = day.actionTaken[idx] || '';
+    const perm = day.permissions[idx] || { type:'', out:'', back:'' };
     const practVal = day.practicalWork[idx] || '';
     const projVal = day.project[idx] || '';
     const noteVal = day.notes[idx] || '';
@@ -1392,6 +1481,15 @@ function renderTable(gid){
         <select data-role="proj" data-idx="${idx}" class="${doneClass(projVal)}">
           ${DONE_STATES.map(st=> `<option value="${st.v}" ${st.v===projVal?'selected':''}>${st.label}</option>`).join('')}
         </select>
+      </td>
+      <td class="col-perm perm-cell">
+        <select data-role="perm-type" data-idx="${idx}">
+          ${PERMISSION_TYPES.map(pt=> `<option value="${pt.v}" ${pt.v===perm.type?'selected':''}>${pt.label}</option>`).join('')}
+        </select>
+        <div class="perm-times">
+          <label>الاستئذان<input type="time" data-role="perm-out" data-idx="${idx}" value="${perm.out || ''}"></label>
+          <label>الرجوع<input type="time" data-role="perm-back" data-idx="${idx}" value="${perm.back || ''}"></label>
+        </div>
       </td>
       <td class="col-notes">
         <textarea data-role="note" data-idx="${idx}" placeholder="ملاحظة...">${escapeHtml(noteVal)}</textarea>
@@ -1456,6 +1554,20 @@ function renderTable(gid){
       scheduleSave(gid);
     });
   });
+  const bindPerm = (role, field)=>{
+    tbody.querySelectorAll(`[data-role="${role}"]`).forEach(el=>{
+      el.addEventListener('change', e=>{
+        const i = Number(e.target.dataset.idx);
+        const d = currentDay(gid);
+        if(!d.permissions[i]) d.permissions[i] = { type:'', out:'', back:'' };
+        d.permissions[i][field] = e.target.value;
+        scheduleSave(gid);
+      });
+    });
+  };
+  bindPerm('perm-type', 'type');
+  bindPerm('perm-out', 'out');
+  bindPerm('perm-back', 'back');
   tbody.querySelectorAll('[data-role="action"]').forEach(sel=>{
     sel.addEventListener('change', e=>{
       const i = Number(e.target.dataset.idx);
@@ -1549,6 +1661,8 @@ document.addEventListener('click', e=>{
   if(action==='clear-participation'){
     const day = currentDay(gid);
     day.participation = {};
+    day.stars = [];
+    renderPodium(gid);
     renderTable(gid);
     scheduleSave(gid);
   }
@@ -1560,6 +1674,9 @@ document.addEventListener('click', e=>{
   }
   if(action==='open-stats'){
     openStatsModal(gid);
+  }
+  if(action==='pick-stars'){
+    pickStars(gid);
   }
 });
 
