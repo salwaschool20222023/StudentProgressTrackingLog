@@ -1047,7 +1047,8 @@ const PERMISSION_TYPES = [
   { v:'', label:'— نوع الاستئذان —' },
   { v:'bathroom', label:'🚻 الحمام' },
   { v:'admin', label:'🏢 الإدارة' },
-  { v:'nurse', label:'🩺 الممرضة' },
+  { v:'nurse', label:'🩺 العيادة' },
+  { v:'teacher_visit', label:'👩‍🏫 زيارة معلمة' },
   { v:'leave', label:'🚪 الخروج' },
 ];
 const ACTION_TYPES = [
@@ -1090,8 +1091,40 @@ function initGradeState(gid){
     rosterBySection: {},   // section -> [names]
     dayBySection: {},      // "section|date" -> day record
     datesBySection: {},    // section -> [dates with saved records] (لأغراض الإحصائيات)
+    lessonTitles: {},      // رقم الدرس -> عنوانه (مشترك بين كل الشعب والتواريخ لنفس الصف)
   };
   sections.forEach(s=> state[gid].rosterBySection[s] = defaultRoster());
+}
+
+function lessonTitlesKey(gid){ return `lesson-titles:${gid}`; }
+async function loadLessonTitlesFor(gid){
+  const data = await cloudGet(lessonTitlesKey(gid));
+  state[gid].lessonTitles = (data && typeof data === 'object') ? data : {};
+}
+let lessonTitleSaveTimer = null;
+function scheduleLessonTitleSave(gid){
+  clearTimeout(lessonTitleSaveTimer);
+  lessonTitleSaveTimer = setTimeout(()=> cloudSet(lessonTitlesKey(gid), state[gid].lessonTitles), 450);
+}
+
+function lastContextKey(gid){ return `last-context:${gid}`; }
+function saveLastContext(gid){
+  const s = state[gid];
+  cloudSet(lastContextKey(gid), { section: s.section, date: s.date });
+}
+async function loadLastContextFor(gid){
+  const data = await cloudGet(lastContextKey(gid));
+  if(data && typeof data === 'object'){
+    if(data.section && allSectionsForGrade(gid).includes(data.section)){
+      state[gid].section = data.section;
+    }
+    if(data.date) state[gid].date = data.date;
+  }
+}
+function saveLastActiveGrade(gid){ cloudSet('last-active-grade', gid); }
+async function loadLastActiveGrade(){
+  const data = await cloudGet('last-active-grade');
+  if(data && GRADES.some(g=> g.id===data)) activeGrade = data;
 }
 
 function dayKey(gid){
@@ -1197,6 +1230,7 @@ function buildSidebar(){
 
 function switchGrade(gid){
   activeGrade = gid;
+  saveLastActiveGrade(gid);
   document.querySelectorAll('.nav-btn').forEach(b=> b.classList.remove('active'));
   document.getElementById('nav-'+gid).classList.add('active');
   document.querySelectorAll('.page').forEach(p=> p.classList.remove('active'));
@@ -1311,12 +1345,14 @@ function buildGradePage(g){
   document.getElementById(`sel-section-${g.id}`).addEventListener('change', async e=>{
     await flushSave(g.id); // احفظي أي تعديل معلّق على الشعبة القديمة أولاً
     state[g.id].section = e.target.value;
+    saveLastContext(g.id);
     onContextChange(g.id);
   });
   document.getElementById(`sel-date-${g.id}`).addEventListener('change', async e=>{
     await flushSave(g.id); // احفظي أي تعديل معلّق على التاريخ القديم أولاً
     state[g.id].date = e.target.value;
     document.getElementById(`sel-date-display-${g.id}`).value = formatDateDMY(e.target.value);
+    saveLastContext(g.id);
     onContextChange(g.id);
   });
   document.querySelectorAll(`#periods-${g.id} .period-chip`).forEach(chip=>{
@@ -1332,12 +1368,15 @@ function buildGradePage(g){
     });
   });
   document.getElementById(`sel-lesson-${g.id}`).addEventListener('change', e=>{
-    currentDay(g.id).lesson = Number(e.target.value);
+    const idx = Number(e.target.value);
+    currentDay(g.id).lesson = idx;
+    document.getElementById(`sel-lessontitle-${g.id}`).value = state[g.id].lessonTitles[idx] || '';
     scheduleSave(g.id);
   });
   document.getElementById(`sel-lessontitle-${g.id}`).addEventListener('input', e=>{
-    currentDay(g.id).lessonTitle = e.target.value;
-    scheduleSave(g.id);
+    const idx = currentDay(g.id).lesson;
+    state[g.id].lessonTitles[idx] = e.target.value;
+    scheduleLessonTitleSave(g.id);
   });
 }
 
@@ -1351,9 +1390,17 @@ async function onContextChange(gid){
   await loadRosterFromCloud(gid, s.section);
   await loadDayFromCloud(gid, s.section, s.date);
   await loadDatesIndex(gid, s.section);
+  migrateLegacyLessonTitle(gid);
   refreshStarOptions(gid);
   renderTable(gid);
   syncHeaderControls(gid);
+}
+
+function migrateLegacyLessonTitle(gid){
+  const day = currentDay(gid);
+  if(day.lessonTitle && !state[gid].lessonTitles[day.lesson]){
+    state[gid].lessonTitles[day.lesson] = day.lessonTitle;
+  }
 }
 
 function syncHeaderControls(gid){
@@ -1367,7 +1414,7 @@ function syncHeaderControls(gid){
     chip.classList.toggle('active', activePeriods.has(Number(chip.dataset.period)));
   });
   document.getElementById(`sel-lesson-${gid}`).value = day.lesson;
-  document.getElementById(`sel-lessontitle-${gid}`).value = day.lessonTitle || '';
+  document.getElementById(`sel-lessontitle-${gid}`).value = state[gid].lessonTitles[day.lesson] || '';
   renderPodium(gid);
 }
 
@@ -1931,15 +1978,22 @@ async function boot(){
   showLockScreenIfNeeded();
   for(const g of GRADES){ await loadExtraSectionsFor(g.id); }
   GRADES.forEach(g=> initGradeState(g.id));
+  // استرجاع آخر صف/شعبة/تاريخ كانت مفتوحة، وعناوين الدروس المحفوظة لكل صف
+  for(const g of GRADES){
+    await loadLastContextFor(g.id);
+    await loadLessonTitlesFor(g.id);
+  }
+  await loadLastActiveGrade();
   buildSidebar();
   GRADES.forEach(g=> buildGradePage(g));
 
-  // تحميل بيانات كل صف من التخزين السحابي (الشعبة والتاريخ الافتراضيين)
+  // تحميل بيانات كل صف من التخزين السحابي (آخر شعبة وتاريخ تم فتحهما)
   for(const g of GRADES){
     const s = state[g.id];
     await loadRosterFromCloud(g.id, s.section);
     await loadDayFromCloud(g.id, s.section, s.date);
     await loadDatesIndex(g.id, s.section);
+    migrateLegacyLessonTitle(g.id);
   }
   GRADES.forEach(g=>{
     refreshStarOptions(g.id);
