@@ -639,7 +639,7 @@ td.col-notes textarea:focus{ border-color:var(--rose); outline:none; background:
   <div id="navButtons"></div>
   <div class="sidebar-footer">
     <div class="save-pill"><span class="save-dot"></span> <span id="saveStatus">محفوظ سحابياً</span></div>
-    سجل متابعة الطالبات · نظام المسارات
+    سجل متابعة الطالبات · نظام المسارات<br>الإصدار: 8-10-2026 (هـ)
     <button class="sidebar-tool-btn" onclick="openSettingsModal()">⚙️ إعدادات التخزين (Supabase)</button>
   </div>
 </nav>
@@ -695,6 +695,13 @@ td.col-notes textarea:focus{ border-color:var(--rose); outline:none; background:
       <select id="statStudent"></select>
     </div>
     <div class="field" style="margin-bottom:10px;">
+      <label>طريقة العرض</label>
+      <select id="statView">
+        <option value="total">إجمالي الفترة</option>
+        <option value="weekly">تفصيل لكل أسبوع — كل مؤشرات الطالبة</option>
+      </select>
+    </div>
+    <div class="field" style="margin-bottom:10px;">
       <label>المؤشر</label>
       <select id="statMetric">
         <option value="all">كل المؤشرات معاً</option>
@@ -705,6 +712,7 @@ td.col-notes textarea:focus{ border-color:var(--rose); outline:none; background:
         <option value="violations">المخالفات 🚫</option>
         <option value="actions">الإجراء المتبع 📋</option>
         <option value="permissions">الاستئذان 🚪</option>
+        <option value="stars">نجمة الحصة 🌟</option>
       </select>
     </div>
     <div class="field" style="margin-bottom:6px;">
@@ -719,6 +727,7 @@ td.col-notes textarea:focus{ border-color:var(--rose); outline:none; background:
       <button class="btn btn-secondary" onclick="closeStatsModal()">إغلاق</button>
       <div style="display:flex; gap:8px;">
         <button class="btn btn-secondary" onclick="printStatsResult()">🖨️ طباعة</button>
+        <button class="btn btn-rose" onclick="printAllStudents()" title="تقرير مستقل لكل طالبة، كل واحدة في صفحة، بنفس الفترة المختارة">🖨️ طباعة لكل طالبة</button>
         <button class="btn btn-primary" onclick="runStats()">عرض النتيجة</button>
       </div>
     </div>
@@ -1816,6 +1825,9 @@ function openStatsModal(gid){
   statsTargetGrade = gid;
   document.getElementById('statScope').value = 'class';
   document.getElementById('statStudentWrap').style.display = 'none';
+  document.getElementById('statView').value = 'total';
+  document.getElementById('statMetric').disabled = false;
+  document.querySelector('#statsModal .modal').style.maxWidth = '';
   const roster = currentRoster(gid);
   fillSelect('statStudent', roster.map((n,i)=> ({v:i, l: n || `طالبة رقم ${i+1}`})));
   document.getElementById('statsResult').innerHTML = '';
@@ -1827,6 +1839,9 @@ function closeStatsModal(){
 }
 
 async function getFilteredDayRecords(gid, section, periodType){
+  return (await getFilteredWeekEntries(gid, section, periodType)).map(e=> e.rec);
+}
+async function getFilteredWeekEntries(gid, section, periodType){
   const refRecord = currentDay(gid);
   const refDate = refRecord.date || todayStr();
   const records = [];
@@ -1837,9 +1852,77 @@ async function getFilteredDayRecords(gid, section, periodType){
     if(periodType==='day' && rec.date !== refDate) continue;
     if(periodType==='month' && rec.date.slice(0,7) !== refDate.slice(0,7)) continue;
     // periodType==='term' → كل الأسابيع المستخدَمة
-    records.push(rec);
+    records.push({ week:w, rec });
   }
   return records;
+}
+
+// ملخص كل مؤشرات طالبة في أسبوع واحد
+function weekInfo(rec, i){
+  const att = rec.attendance && rec.attendance[i];
+  const badges = (rec.participation && rec.participation[i]) || [];
+  const cnt = b=> badges.filter(x=> x===b).length;
+  const done = v=> v==='applied' ? '✅' : (v==='not_applied' ? '❌' : '—');
+  const v = rec.violations && rec.violations[i];
+  const a = rec.actionTaken && rec.actionTaken[i];
+  const pm = rec.permissions && rec.permissions[i];
+  const sp = (rec.stars || []).indexOf(i);
+  const find = (arr, val)=> (arr.find(x=> x.v===val) || {});
+  let perm = '—';
+  if(pm && pm.type){
+    perm = find(PERMISSION_TYPES, pm.type).label || pm.type;
+    if(pm.out || pm.back) perm += ` (${pm.out||'؟'} ← ${pm.back||'؟'})`;
+  }
+  return {
+    att: att==='present' ? '✅ حضور' : att==='absent' ? '❌ غياب' : att==='late' ? '⏱️ تأخير' : '—',
+    attIcon: att==='present' ? '✅' : att==='absent' ? '❌' : att==='late' ? '⏱️' : '—',
+    part: ['⭐','🏆','🔥'].filter(b=> cnt(b)).map(b=> b+cnt(b)).join(' ') || '—',
+    pract: done(rec.practicalWork && rec.practicalWork[i]),
+    proj: done(rec.project && rec.project[i]),
+    viol: v ? (find(VIOLATION_TYPES, v).full || v) : '—',
+    action: a ? (find(ACTION_TYPES, a).label || a) : '—',
+    perm,
+    star: sp>=0 ? ['🥇 المركز الأول','🥈 المركز الثاني','🥉 المركز الثالث'][sp] : '—',
+  };
+}
+
+async function buildWeeklyHtml(gid, section, period, studentIdx, periodLabel){
+  const entries = await getFilteredWeekEntries(gid, section, period);
+  const roster = state[gid].rosterBySection[section] || [];
+  const nm = i=> roster[i] || `طالبة رقم ${i+1}`;
+  const th = t=> `<th style="background:#1B1F3B;color:#fff;padding:7px 6px;border:1px solid #1B1F3B;white-space:nowrap;font-size:12px;">${t}</th>`;
+  const td = (t, extra='')=> `<td style="padding:6px;border:1px solid #E4DCD3;text-align:center;font-size:12px;${extra}">${t}</td>`;
+  const title = studentIdx!==null ? `تفصيل أسبوعي — ${escapeHtml(nm(studentIdx))}` : 'تفصيل أسبوعي — كل الطالبات';
+  let html = `<div class="hint-box"><b>${title}</b> — الشعبة: ${section} — الفترة: ${periodLabel}</div>`;
+  if(!entries.length){
+    return html + '<p style="margin-top:10px;">لا توجد أسابيع مسجّلة في هذه الفترة.</p>';
+  }
+  if(studentIdx !== null){
+    html += '<div style="overflow-x:auto;"><table style="width:100%;margin-top:10px;border-collapse:collapse;"><tr>' +
+      ['الأسبوع','التاريخ','الحضور','المشاركة','نجمة الحصة','التطبيق العملي','المشروع','المخالفة','الإجراء المتبع','الاستئذان'].map(th).join('') + '</tr>';
+    entries.forEach(({week, rec})=>{
+      const x = weekInfo(rec, studentIdx);
+      html += '<tr>' + td(LESSONS[week], 'font-weight:700;') + td(formatDateDMY(rec.date)) + td(x.att) + td(x.part) + td(x.star) +
+        td(x.pract) + td(x.proj) + td(x.viol) + td(x.action) + td(x.perm) + '</tr>';
+    });
+    return html + '</table></div>';
+  }
+  html += '<div style="overflow-x:auto;"><table style="width:100%;margin-top:10px;border-collapse:collapse;"><tr>' + th('الاسم') +
+    entries.map(({week, rec})=> th(`${LESSONS[week]}<br><span style="font-weight:400;font-size:10.5px;">${formatDateDMY(rec.date)}</span>`)).join('') + '</tr>';
+  roster.forEach((_, i)=>{
+    html += '<tr>' + td(escapeHtml(nm(i)), 'text-align:right;white-space:nowrap;font-weight:700;');
+    entries.forEach(({rec})=>{
+      const x = weekInfo(rec, i);
+      let c = `<div>${x.attIcon} ${x.part}</div><div>تطبيق ${x.pract} · مشروع ${x.proj}</div>`;
+      if(x.viol !== '—') c += `<div>🚫 ${x.viol}</div>`;
+      if(x.action !== '—') c += `<div>${x.action}</div>`;
+      if(x.perm !== '—') c += `<div>${x.perm}</div>`;
+      if(x.star !== '—') c += `<div>🌟 ${x.star}</div>`;
+      html += td(c, 'font-size:10.5px;line-height:1.55;min-width:120px;');
+    });
+    html += '</tr>';
+  });
+  return html + '</table></div>';
 }
 
 async function computeStats(gid, section, metric, periodType, studentIdx){
@@ -1865,6 +1948,8 @@ async function computeStats(gid, section, metric, periodType, studentIdx){
         if(rec.actionTaken && rec.actionTaken[i]) totals[i]++;
       }else if(metric==='permissions'){
         if(rec.permissions && rec.permissions[i] && rec.permissions[i].type) totals[i]++;
+      }else if(metric==='stars'){
+        if(rec.stars && rec.stars.includes(i)) totals[i]++;
       }
     });
   });
@@ -1879,7 +1964,7 @@ async function computeStats(gid, section, metric, periodType, studentIdx){
 async function computeStatsAll(gid, section, periodType, studentIdx){
   const records = await getFilteredDayRecords(gid, section, periodType);
   const roster = state[gid].rosterBySection[section] || [];
-  const totals = roster.map(()=> ({absence:0, practical:0, project:0, participation:0, violations:0, actions:0, permissions:0}));
+  const totals = roster.map(()=> ({absence:0, practical:0, project:0, participation:0, violations:0, actions:0, permissions:0, stars:0, gold:0, silver:0, bronze:0}));
 
   records.forEach(rec=>{
     roster.forEach((_,i)=>{
@@ -1891,14 +1976,16 @@ async function computeStatsAll(gid, section, periodType, studentIdx){
       if(rec.violations && rec.violations[i]) totals[i].violations++;
       if(rec.actionTaken && rec.actionTaken[i]) totals[i].actions++;
       if(rec.permissions && rec.permissions[i] && rec.permissions[i].type) totals[i].permissions++;
+      const sp = (rec.stars || []).indexOf(i);
+      if(sp >= 0){ totals[i].stars++; if(sp===0) totals[i].gold++; else if(sp===1) totals[i].silver++; else if(sp===2) totals[i].bronze++; }
     });
   });
 
   const rows = roster.map((n,i)=> ({ name: n || `طالبة رقم ${i+1}`, ...totals[i] }));
   if(studentIdx !== null) return [rows[studentIdx]];
   return rows.sort((a,b)=>
-    (b.absence+b.practical+b.project+b.participation+b.violations+b.actions+b.permissions) -
-    (a.absence+a.practical+a.project+a.participation+a.violations+a.actions+a.permissions)
+    (b.absence+b.practical+b.project+b.participation+b.violations+b.actions+b.permissions+b.stars) -
+    (a.absence+a.practical+a.project+a.participation+a.violations+a.actions+a.permissions+a.stars)
   );
 }
 
@@ -1916,11 +2003,19 @@ async function runStats(){
 
   document.getElementById('statsResult').innerHTML = '<p>جارٍ الحساب...</p>';
 
+  const weekly = document.getElementById('statView').value === 'weekly';
+  document.querySelector('#statsModal .modal').style.maxWidth = weekly ? '1100px' : '';
+  if(weekly){
+    document.getElementById('statsResult').innerHTML = await buildWeeklyHtml(gid, section, period, studentIdx, periodLabel);
+    lastStatsMeta = { gradeName, section, periodLabel, metricLabel:'تفصيل لكل أسبوع — كل المؤشرات', weekly:true };
+    return;
+  }
+
   if(metric==='all'){
     const rows = await computeStatsAll(gid, section, period, studentIdx);
     let html = `<div class="hint-box"><b>كل المؤشرات معاً</b> — الشعبة: ${section} — الفترة: ${periodLabel}</div>`;
     html += '<div style="overflow-x:auto;"><table style="width:100%;margin-top:10px;border-collapse:collapse;font-size:12px;">';
-    html += '<tr>' + ['الاسم','غياب','تطبيق عملي','مشروع','مشاركة','مخالفات','الإجراء المتبع','الاستئذان'].map(h=>
+    html += '<tr>' + ['الاسم','غياب','تطبيق عملي','مشروع','مشاركة','مخالفات','الإجراء المتبع','الاستئذان','نجمة الحصة 🌟'].map(h=>
       `<th style="padding:6px 4px;border-bottom:2px solid var(--line);white-space:nowrap;">${h}</th>`).join('') + '</tr>';
     rows.forEach(r=>{
       html += `<tr><td style="padding:6px 4px;border-bottom:1px solid var(--line);text-align:right;">${escapeHtml(r.name)}</td>` +
@@ -1930,7 +2025,8 @@ async function runStats(){
         `<td style="text-align:center;padding:6px 4px;border-bottom:1px solid var(--line);">${r.participation}</td>` +
         `<td style="text-align:center;padding:6px 4px;border-bottom:1px solid var(--line);">${r.violations}</td>` +
         `<td style="text-align:center;padding:6px 4px;border-bottom:1px solid var(--line);">${r.actions}</td>` +
-        `<td style="text-align:center;padding:6px 4px;border-bottom:1px solid var(--line);">${r.permissions}</td></tr>`;
+        `<td style="text-align:center;padding:6px 4px;border-bottom:1px solid var(--line);">${r.permissions}</td>` +
+        `<td style="text-align:center;padding:6px 4px;border-bottom:1px solid var(--line);white-space:nowrap;">${r.stars ? `${r.stars} (🥇${r.gold} 🥈${r.silver} 🥉${r.bronze})` : 0}</td></tr>`;
     });
     html += '</table></div>';
     document.getElementById('statsResult').innerHTML = html;
@@ -1947,6 +2043,7 @@ async function runStats(){
     violations:'عدد المخالفات المسجّلة',
     actions:'عدد الإجراءات المتبعة',
     permissions:'عدد مرات الاستئذان',
+    stars:'عدد مرات اختيارها نجمة الحصة 🌟',
   }[metric];
 
   let html = `<div class="hint-box"><b>${metricLabel}</b> — الشعبة: ${section} — الفترة: ${periodLabel}</div>`;
@@ -1958,6 +2055,83 @@ async function runStats(){
   html += '</table>';
   document.getElementById('statsResult').innerHTML = html;
   lastStatsMeta = { gradeName, section, periodLabel, metricLabel };
+}
+
+// صفحة تقرير واحدة لطالبة: جدول أسابيعها + ملخص إجمالي
+function buildStudentPageHtml(meta, entries, i, name){
+  const th = t=> `<th style="background:#1B1F3B;color:#fff;padding:6px 5px;border:1px solid #1B1F3B;font-size:12px;">${t}</th>`;
+  const td = (t, extra='')=> `<td style="padding:6px 5px;border:1px solid #bbb;text-align:center;font-size:12px;${extra}">${t}</td>`;
+  const tot = { present:0, absent:0, late:0, star:0, trophy:0, fire:0, pract:0, proj:0, viol:0, action:0, perm:0, stars:0 };
+  let rows = '';
+  entries.forEach(({week, rec})=>{
+    const x = weekInfo(rec, i);
+    const att = rec.attendance && rec.attendance[i];
+    if(att==='present') tot.present++; else if(att==='absent') tot.absent++; else if(att==='late') tot.late++;
+    const b = (rec.participation && rec.participation[i]) || [];
+    tot.star += b.filter(v=> v==='⭐').length; tot.trophy += b.filter(v=> v==='🏆').length; tot.fire += b.filter(v=> v==='🔥').length;
+    if(rec.practicalWork && rec.practicalWork[i]==='applied') tot.pract++;
+    if(rec.project && rec.project[i]==='applied') tot.proj++;
+    if(x.viol !== '—') tot.viol++;
+    if(x.action !== '—') tot.action++;
+    if(x.perm !== '—') tot.perm++;
+    if(x.star !== '—') tot.stars++;
+    rows += '<tr>' + td(LESSONS[week], 'font-weight:700;') + td(formatDateDMY(rec.date)) + td(x.att) + td(x.part) + td(x.star) +
+      td(x.pract) + td(x.proj) + td(x.viol) + td(x.action) + td(x.perm) + '</tr>';
+  });
+  const summary = `حضور: ${tot.present} · غياب: ${tot.absent} · تأخير: ${tot.late} · مشاركة: ⭐${tot.star} 🏆${tot.trophy} 🔥${tot.fire} · ` +
+    `تطبيق عملي (طبّقت): ${tot.pract} · مشروع (طبّقت): ${tot.proj} · مخالفات: ${tot.viol} · إجراءات: ${tot.action} · استئذان: ${tot.perm} · نجمة الحصة 🌟: ${tot.stars}`;
+  return `<section class="student-page">
+    <h1>سجل متابعة الطالبات — ثانوية سلوى للبنات</h1>
+    <p class="meta">أ. غادة دياب (قسم الحاسوب) — ${meta.gradeName} — الشعبة: ${meta.section} — الفترة: ${meta.periodLabel}</p>
+    <h2>${escapeHtml(name)}</h2>
+    <table style="width:100%;border-collapse:collapse;"><tr>` +
+      ['الأسبوع','التاريخ','الحضور','المشاركة','نجمة الحصة','التطبيق العملي','المشروع','المخالفة','الإجراء المتبع','الاستئذان'].map(th).join('') +
+    `</tr>${rows}</table>
+    <p class="summary"><b>الإجمالي:</b> ${summary}</p>
+  </section>`;
+}
+
+async function printAllStudents(){
+  const gid = statsTargetGrade;
+  const section = state[gid].section;
+  const period = document.getElementById('statPeriod').value;
+  const periodLabel = { day:'اليوم الحالي', month:'الشهر الحالي', term:'الفصل الدراسي كاملاً' }[period];
+  const gradeName = (GRADES.find(g=> g.id===gid) || {}).name || '';
+  const roster = state[gid].rosterBySection[section] || [];
+  const entries = await getFilteredWeekEntries(gid, section, period);
+  if(!entries.length){ alert('لا توجد أسابيع مسجّلة في هذه الفترة لطباعتها'); return; }
+  const idxs = roster.map((n,i)=> i).filter(i=> (roster[i]||'').trim());
+  if(!idxs.length){ alert('لا توجد أسماء طالبات في هذه الشعبة'); return; }
+  const win = window.open('', '_blank');
+  if(!win){ alert('يبدو أن المتصفح منع فتح نافذة جديدة — يرجى السماح بالنوافذ المنبثقة لهذا الموقع ثم إعادة المحاولة'); return; }
+  const meta = { gradeName, section, periodLabel };
+  const pages = idxs.map(i=> buildStudentPageHtml(meta, entries, i, roster[i])).join('');
+  win.document.write(`<!DOCTYPE html>
+<html lang="ar" dir="rtl"><head><meta charset="UTF-8">
+<title>تقارير الطالبات — ${gradeName} — ${section}</title>
+<link href="https://fonts.googleapis.com/css2?family=Almarai:wght@700;800&family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  @page{ size:A4 landscape; margin:10mm; }
+  *{ box-sizing:border-box; }
+  body{ font-family:'Tajawal',Arial,sans-serif; color:#1B1F3B; direction:rtl; margin:0; padding:16px; }
+  .student-page{ page-break-after:always; break-after:page; padding:4px 2px; }
+  .student-page:last-of-type{ page-break-after:auto; break-after:auto; }
+  h1{ font-family:'Almarai',sans-serif; font-size:17px; margin:0 0 4px; }
+  h2{ font-family:'Almarai',sans-serif; font-size:19px; margin:10px 0; color:#8C2C48; }
+  p.meta{ color:#4A4E6B; font-size:12.5px; margin:2px 0 6px; }
+  p.summary{ margin-top:12px; font-size:12.5px; line-height:1.9; background:#F1ECE6; border:1px solid #E4DCD3; border-radius:8px; padding:8px 12px; }
+  tr{ page-break-inside:avoid; }
+  .no-print{ position:sticky; top:0; background:#fff; padding:8px 0 12px; }
+  .no-print button{ font-family:'Tajawal',Arial,sans-serif; font-size:13px; font-weight:700; padding:9px 16px; border-radius:8px; border:none; background:#8C2C48; color:#fff; cursor:pointer; }
+  @media print{ .no-print{ display:none; } body{ padding:0; } }
+</style></head>
+<body>
+  <div class="no-print"><button onclick="window.print()">🖨️ طباعة (${idxs.length} طالبة — صفحة لكل طالبة)</button></div>
+  ${pages}
+</body></html>`);
+  win.document.close();
+  win.focus();
+  setTimeout(()=>{ try{ win.print(); }catch(e){} }, 900);
 }
 
 function printStatsResult(){
@@ -1986,6 +2160,7 @@ function printStatsResult(){
   table{ width:100%; border-collapse:collapse; }
   th{ background:var(--ink); color:#fff; padding:8px 6px; text-align:center; }
   @media print{ .no-print{ display:none; } }
+  ${m.weekly ? '@page{ size:A4 landscape; margin:10mm; }' : ''}
   .no-print{ margin-top:18px; }
   .no-print button{ font-family:'Tajawal',Arial,sans-serif; font-size:13px; font-weight:700; padding:9px 16px; border-radius:8px; border:none; background:var(--rose-deep); color:#fff; cursor:pointer; }
 </style></head>
@@ -2000,6 +2175,9 @@ function printStatsResult(){
   setTimeout(()=>{ try{ win.print(); }catch(e){} }, 400);
 }
 
+document.getElementById('statView').addEventListener('change', e=>{
+  document.getElementById('statMetric').disabled = (e.target.value === 'weekly');
+});
 document.getElementById('statScope').addEventListener('change', e=>{
   document.getElementById('statStudentWrap').style.display = e.target.value==='student' ? 'block' : 'none';
 });
