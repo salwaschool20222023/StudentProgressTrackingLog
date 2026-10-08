@@ -703,6 +703,8 @@ td.col-notes textarea:focus{ border-color:var(--rose); outline:none; background:
         <option value="project">المشروع (طبّقت)</option>
         <option value="participation">المشاركة ⭐🏆</option>
         <option value="violations">المخالفات 🚫</option>
+        <option value="actions">الإجراء المتبع 📋</option>
+        <option value="permissions">الاستئذان 🚪</option>
       </select>
     </div>
     <div class="field" style="margin-bottom:6px;">
@@ -1021,7 +1023,7 @@ async function loadExtraSectionsFor(gid){
 function allSectionsForGrade(gid){
   return sectionsForGrade(gid).concat(extraSections[gid] || []);
 }
-const ROSTER_SIZE = 25;
+const ROSTER_SIZE = 21;
 const LESSONS = Array.from({length:15}, (_,i)=> `الأسبوع ${i+1}`);
 const PERIODS = Array.from({length:7}, (_,i)=> i+1);
 const ATT_STATES = [
@@ -1161,6 +1163,7 @@ async function loadRosterFromCloud(gid, section){
     let arr = data.slice(0, ROSTER_SIZE);
     while(arr.length < ROSTER_SIZE) arr.push('');
     state[gid].rosterBySection[section] = arr;
+    if(data.length > ROSTER_SIZE) cloudSet(rosterKey(gid, section), arr); // حذف الزيادة نهائياً من التخزين
   }
 }
 
@@ -1185,6 +1188,11 @@ function normalizeDayRecord(day){
   delete day.week;
   delete day.lesson;
   if(day.date === undefined) day.date = '';
+  // حذف أي بيانات لطالبات زائدات عن عدد الكشف الحالي
+  ['attendance','participation','violations','actionTaken','practicalWork','project','permissions','notes'].forEach(f=>{
+    Object.keys(day[f]||{}).forEach(k=>{ if(Number(k) >= ROSTER_SIZE) delete day[f][k]; });
+  });
+  day.stars = (day.stars||[]).filter(i=> Number(i) < ROSTER_SIZE);
   return day;
 }
 
@@ -1853,6 +1861,10 @@ async function computeStats(gid, section, metric, periodType, studentIdx){
         totals[i] += arr.length;
       }else if(metric==='violations'){
         if(rec.violations && rec.violations[i]) totals[i]++;
+      }else if(metric==='actions'){
+        if(rec.actionTaken && rec.actionTaken[i]) totals[i]++;
+      }else if(metric==='permissions'){
+        if(rec.permissions && rec.permissions[i] && rec.permissions[i].type) totals[i]++;
       }
     });
   });
@@ -1867,7 +1879,7 @@ async function computeStats(gid, section, metric, periodType, studentIdx){
 async function computeStatsAll(gid, section, periodType, studentIdx){
   const records = await getFilteredDayRecords(gid, section, periodType);
   const roster = state[gid].rosterBySection[section] || [];
-  const totals = roster.map(()=> ({absence:0, practical:0, project:0, participation:0, violations:0}));
+  const totals = roster.map(()=> ({absence:0, practical:0, project:0, participation:0, violations:0, actions:0, permissions:0}));
 
   records.forEach(rec=>{
     roster.forEach((_,i)=>{
@@ -1877,14 +1889,16 @@ async function computeStatsAll(gid, section, periodType, studentIdx){
       if(rec.project && rec.project[i]==='applied') totals[i].project++;
       totals[i].participation += ((rec.participation && rec.participation[i]) || []).length;
       if(rec.violations && rec.violations[i]) totals[i].violations++;
+      if(rec.actionTaken && rec.actionTaken[i]) totals[i].actions++;
+      if(rec.permissions && rec.permissions[i] && rec.permissions[i].type) totals[i].permissions++;
     });
   });
 
   const rows = roster.map((n,i)=> ({ name: n || `طالبة رقم ${i+1}`, ...totals[i] }));
   if(studentIdx !== null) return [rows[studentIdx]];
   return rows.sort((a,b)=>
-    (b.absence+b.practical+b.project+b.participation+b.violations) -
-    (a.absence+a.practical+a.project+a.participation+a.violations)
+    (b.absence+b.practical+b.project+b.participation+b.violations+b.actions+b.permissions) -
+    (a.absence+a.practical+a.project+a.participation+a.violations+a.actions+a.permissions)
   );
 }
 
@@ -1906,7 +1920,7 @@ async function runStats(){
     const rows = await computeStatsAll(gid, section, period, studentIdx);
     let html = `<div class="hint-box"><b>كل المؤشرات معاً</b> — الشعبة: ${section} — الفترة: ${periodLabel}</div>`;
     html += '<div style="overflow-x:auto;"><table style="width:100%;margin-top:10px;border-collapse:collapse;font-size:12px;">';
-    html += '<tr>' + ['الاسم','غياب','تطبيق عملي','مشروع','مشاركة','مخالفات'].map(h=>
+    html += '<tr>' + ['الاسم','غياب','تطبيق عملي','مشروع','مشاركة','مخالفات','الإجراء المتبع','الاستئذان'].map(h=>
       `<th style="padding:6px 4px;border-bottom:2px solid var(--line);white-space:nowrap;">${h}</th>`).join('') + '</tr>';
     rows.forEach(r=>{
       html += `<tr><td style="padding:6px 4px;border-bottom:1px solid var(--line);text-align:right;">${escapeHtml(r.name)}</td>` +
@@ -1914,7 +1928,9 @@ async function runStats(){
         `<td style="text-align:center;padding:6px 4px;border-bottom:1px solid var(--line);">${r.practical}</td>` +
         `<td style="text-align:center;padding:6px 4px;border-bottom:1px solid var(--line);">${r.project}</td>` +
         `<td style="text-align:center;padding:6px 4px;border-bottom:1px solid var(--line);">${r.participation}</td>` +
-        `<td style="text-align:center;padding:6px 4px;border-bottom:1px solid var(--line);">${r.violations}</td></tr>`;
+        `<td style="text-align:center;padding:6px 4px;border-bottom:1px solid var(--line);">${r.violations}</td>` +
+        `<td style="text-align:center;padding:6px 4px;border-bottom:1px solid var(--line);">${r.actions}</td>` +
+        `<td style="text-align:center;padding:6px 4px;border-bottom:1px solid var(--line);">${r.permissions}</td></tr>`;
     });
     html += '</table></div>';
     document.getElementById('statsResult').innerHTML = html;
@@ -1929,6 +1945,8 @@ async function runStats(){
     project:'مرات تطبيق المشروع',
     participation:'إجمالي رموز المشاركة',
     violations:'عدد المخالفات المسجّلة',
+    actions:'عدد الإجراءات المتبعة',
+    permissions:'عدد مرات الاستئذان',
   }[metric];
 
   let html = `<div class="hint-box"><b>${metricLabel}</b> — الشعبة: ${section} — الفترة: ${periodLabel}</div>`;
