@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>سجل متابعة الطالبات | قسم الحاسوب</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Almarai:wght@400;700;800&family=Tajawal:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Almarai:wght@400;700;800&family=Lalezar&family=Tajawal:wght@300;400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{
@@ -623,6 +623,39 @@ td.col-notes textarea:focus{ border-color:var(--rose); outline:none; background:
   .header-titles h1{ font-size:15.5px; }
   .btn{ font-size:11.5px; padding:8px 10px; }
 }
+
+/* ===== الاختيار العشوائي (عجلة الحظ) ===== */
+#pkOverlay{
+  --bg:#f4f0ff;--ink:#241a5c;--card:#fff;--line:#d9d0ff;--pink:#ff4f87;--sun:#ffc23c;--mint:#18b98d;--mute:#6b628f;
+  display:none; position:fixed; inset:0; z-index:300; overflow-y:auto;
+  background:var(--bg); color:var(--ink);
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+#pkOverlay.open{ display:block; }
+#pkOverlay .pk-wrap{ max-width:980px; margin:0 auto; padding:20px 16px 40px; }
+#pkOverlay h1{ font-family:Lalezar,Tajawal,sans-serif; font-weight:400; font-size:clamp(34px,7vw,60px); margin:6px 0 10px; line-height:1.15; }
+#pkOverlay .pk-top{ display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
+#pkOverlay .pk-chips{ display:flex; flex-wrap:wrap; gap:8px; }
+#pkOverlay .pk-chip{ background:var(--card); border:2px solid var(--line); border-radius:999px; padding:5px 14px; font-weight:700; font-size:15px; }
+#pkOverlay .pk-chip.hot{ background:var(--sun); border-color:var(--sun); color:#3a2a00; }
+#pkOverlay .pk-stage{ margin:14px 0 22px; padding:10px 0 16px; text-align:center; }
+#pkOverlay .pk-label{ font-size:18px; opacity:.85; margin-bottom:10px; }
+#pkOverlay .pk-name{ font-family:Lalezar,Tajawal,sans-serif; font-size:clamp(34px,8vw,76px); min-height:1.5em; line-height:1.3; display:flex; align-items:center; justify-content:center; padding:0 24px; word-break:break-word; }
+#pkOverlay .pk-name.win{ color:var(--pink); animation:pkpop .7s cubic-bezier(.2,1.6,.4,1); }
+@keyframes pkpop{ 0%{transform:scale(.3) rotate(-6deg)} 100%{transform:scale(1) rotate(0)} }
+#pkOverlay .pk-msg{ min-height:26px; margin:4px 0 16px; font-size:18px; color:var(--pink); font-weight:700; }
+#pkOverlay button, #pkOverlay .pk-btn{ font-family:inherit; font-weight:700; font-size:16px; border:0; border-radius:16px; padding:10px 18px; cursor:pointer; transition:transform .12s; }
+#pkOverlay button:active{ transform:translateY(2px); }
+#pkGo{ font-size:clamp(22px,5vw,30px)!important; padding:16px 44px!important; background:var(--pink); color:#fff; box-shadow:0 6px 0 #b8265a; }
+#pkGo:disabled{ opacity:.5; cursor:not-allowed; }
+#pkOverlay .pk-bar{ display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+#pkOverlay .pk-btn, #pkOverlay .pk-bar select, #pkOverlay .pk-bar label{ background:var(--card); color:var(--ink); border:2px solid var(--line); border-radius:16px; padding:8px 16px; font-family:inherit; font-weight:700; font-size:15px; display:inline-flex; align-items:center; gap:8px; }
+#pkOverlay .pk-close{ background:var(--ink); color:#fff; }
+#pkOverlay .pk-ww{ position:relative; max-width:390px; margin:10px auto 4px; line-height:0; }
+#pkOverlay .pk-ww canvas{ display:block; margin:0 auto; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+#pkCv{ position:fixed; inset:0; width:100%; height:100%; pointer-events:none; z-index:50; }
+#pkOverlay .pk-done{ margin-top:16px; background:var(--card); border:2px solid var(--line); border-radius:16px; padding:12px 16px; }
+#pkOverlay .pk-done b{ display:inline-block; background:var(--sun); color:#3a2a00; border-radius:999px; padding:2px 12px; margin:3px; }
 </style>
 </head>
 <body>
@@ -732,6 +765,82 @@ td.col-notes textarea:focus{ border-color:var(--rose); outline:none; background:
       </div>
     </div>
     <div id="statsResult"></div>
+  </div>
+</div>
+
+<!-- ===== Copy Week Modal ===== -->
+<div class="modal-overlay" id="copyWeekModal">
+  <div class="modal">
+    <h2>📋 نسخ بيانات أسبوع إلى أسبوع</h2>
+    <p>تُنسخ كل بيانات الأسبوع المصدر (الحضور، المشاركة، المخالفات، الاستئذان، الملاحظات، المتميزات، الحصص، وعنوان الدرس) إلى الأسبوع الهدف، فيصبح الأسبوعان بنفس البيانات. <b>بيانات الأسبوع الهدف الحالية تُستبدل.</b> يبقى تاريخ الأسبوع الهدف كما هو (وإن كان فارغاً يأخذ تاريخ المصدر).</p>
+    <div class="field" style="margin-bottom:10px;">
+      <label>انسخي من</label>
+      <select id="cwFrom"></select>
+    </div>
+    <div class="field" style="margin-bottom:10px;">
+      <label>إلى</label>
+      <select id="cwTo"></select>
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:6px 0 10px;">
+      <input type="checkbox" id="cwAll"> <span id="cwAllLabel">طبّقي على كل شعب هذا الصف</span>
+    </label>
+    <div id="cwResult" style="font-size:13px;min-height:18px;"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeCopyWeekModal()">إغلاق</button>
+      <button class="btn btn-primary" onclick="runCopyWeek()">نسخ الآن</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Random Picker (عجلة الحظ) ===== -->
+<div id="pkOverlay" role="dialog" aria-label="اختيار طالبة عشوائي">
+  <div class="pk-wrap">
+    <div class="pk-top">
+      <div class="pk-chips"><span class="pk-chip hot" id="pkChip"></span><span class="pk-chip">المعلمة غادة دياب</span><span class="pk-chip">قسم الحاسوب</span></div>
+      <button type="button" class="pk-btn pk-close" onclick="closePicker()">✕ إغلاق</button>
+    </div>
+    <h1>من الطالبة المختارة؟</h1>
+    <section class="pk-stage" aria-live="polite">
+      <div class="pk-label" id="pkLabel"></div>
+      <div class="pk-ww" id="pkWw"><canvas id="pkWheel" role="button" tabindex="0" aria-label="اضغطي على العجلة لتدور"></canvas></div>
+      <div class="pk-name" id="pkName">؟؟؟</div>
+      <div class="pk-msg" id="pkMsg"></div>
+      <button type="button" id="pkGo" disabled>اختاري طالبة</button>
+    </section>
+    <div class="pk-bar">
+      <label><input type="checkbox" id="pkSkip" checked> استبعاد الغائبات</label>
+      <button type="button" class="pk-btn" id="pkSnd" aria-pressed="true">النطق بالاسم: يعمل</button>
+      <button type="button" class="pk-btn" id="pkAgain">إعادة نطق الاسم</button>
+      <select id="pkVsel" aria-label="اختيار الصوت" style="max-width:100%"></select>
+      <label>نعومة الصوت <input type="range" id="pkPit" min="0.8" max="2" step="0.1" value="1.6" style="width:110px;accent-color:var(--pink)"></label>
+      <button type="button" class="pk-btn" id="pkReset">إعادة الاختيار من البداية</button>
+    </div>
+    <div class="pk-done" id="pkDone"></div>
+  </div>
+  <canvas id="pkCv"></canvas>
+</div>
+
+<!-- ===== Certificates Modal ===== -->
+<div class="modal-overlay" id="certModal">
+  <div class="modal">
+    <h2>🎓 شهادات نجمة الحصة</h2>
+    <p>تُنشأ شهادة تقدير لكل طالبة نالت نجمة الحصة في الأسبوع المختار، من الشعبة المفتوحة حالياً. تُحسب النجمة فقط في الأسابيع التي ضغطتِ فيها زر "اعرفي المتميزات".</p>
+    <div class="field" style="margin-bottom:10px;">
+      <label>الأسبوع</label>
+      <select id="certWeek"></select>
+    </div>
+    <div class="field" style="margin-bottom:10px;">
+      <label>المراكز</label>
+      <select id="certRanks">
+        <option value="all">كل المتميزات (المراكز الأول والثاني والثالث)</option>
+        <option value="first">المركز الأول فقط</option>
+      </select>
+    </div>
+    <div id="certResult" style="font-size:13px;min-height:18px;"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeCertModal()">إغلاق</button>
+      <button class="btn btn-primary" onclick="showCertificates()">عرض الشهادات</button>
+    </div>
   </div>
 </div>
 
@@ -1176,6 +1285,13 @@ async function loadRosterFromCloud(gid, section){
   }
 }
 
+// نسخة عميقة من سجل أسبوع لتوضع في أسبوع آخر
+function makeWeekCopy(src, existing){
+  const c = normalizeDayRecord(JSON.parse(JSON.stringify(src)));
+  c.date = (existing && existing.date) ? existing.date : src.date;
+  return c;
+}
+
 function normalizeDayRecord(day){
   if(!day.violations) day.violations = {};
   Object.keys(day.violations).forEach(k=>{
@@ -1344,6 +1460,7 @@ function buildGradePage(g){
         <span class="star-icon">🌟</span>
         <span class="star-label">الطالبات المتميزات</span>
         <button type="button" class="btn btn-rose" data-action="pick-stars" data-grade="${g.id}">🏅 اعرفي المتميزات</button>
+        <button type="button" class="btn btn-secondary" data-action="open-certs" data-grade="${g.id}">🎓 شهادات نجمة الحصة</button>
         <div class="podium" id="podium-${g.id}"></div>
       </div>
     </div>
@@ -1355,7 +1472,9 @@ function buildGradePage(g){
         <button class="btn btn-secondary" data-action="clear-participation" data-grade="${g.id}">↺ تصفير المشاركة</button>
       </div>
       <div class="left-group">
+        <button class="btn btn-secondary" data-action="open-picker" data-grade="${g.id}">🎡 اختيار طالبة عشوائي</button>
         <button class="btn btn-secondary" data-action="open-stats" data-grade="${g.id}">📊 إحصائيات</button>
+        <button class="btn btn-secondary" data-action="open-copy-week" data-grade="${g.id}">📋 نسخ أسبوع</button>
         <button class="btn btn-rose" data-action="open-import" data-grade="${g.id}">📥 استيراد الأسماء</button>
         <button class="btn btn-ghost" data-action="add-section" data-grade="${g.id}">+ شعبة جديدة</button>
       </div>
@@ -1764,6 +1883,15 @@ document.addEventListener('click', e=>{
   if(action==='open-stats'){
     openStatsModal(gid);
   }
+  if(action==='open-picker'){
+    openPicker(gid);
+  }
+  if(action==='open-certs'){
+    openCertModal(gid);
+  }
+  if(action==='open-copy-week'){
+    openCopyWeekModal(gid);
+  }
   if(action==='pick-stars'){
     pickStars(gid);
   }
@@ -1791,6 +1919,58 @@ async function addNewSection(gid){
 // نافذة استيراد الأسماء
 // =========================================================
 let importTargetGrade = null;
+let copyWeekGrade = null;
+function openCopyWeekModal(gid){
+  copyWeekGrade = gid;
+  fillSelect('cwFrom', LESSONS.map((l,i)=>({v:i, l})));
+  fillSelect('cwTo', LESSONS.map((l,i)=>({v:i, l})));
+  document.getElementById('cwFrom').value = 1; // الأسبوع 2
+  document.getElementById('cwTo').value = 2;   // الأسبوع 3
+  document.getElementById('cwAll').checked = false;
+  document.getElementById('cwAllLabel').textContent =
+    `طبّقي على كل شعب هذا الصف (${allSectionsForGrade(gid).length} شعبة) — وإلا يُنسخ للشعبة المفتوحة فقط: ${state[gid].section}`;
+  document.getElementById('cwResult').textContent = '';
+  document.getElementById('copyWeekModal').classList.add('open');
+}
+function closeCopyWeekModal(){
+  document.getElementById('copyWeekModal').classList.remove('open');
+}
+async function runCopyWeek(){
+  const gid = copyWeekGrade;
+  const from = Number(document.getElementById('cwFrom').value);
+  const to = Number(document.getElementById('cwTo').value);
+  const all = document.getElementById('cwAll').checked;
+  const out = document.getElementById('cwResult');
+  if(from === to){ out.style.color='var(--absent)'; out.textContent = 'اختاري أسبوعين مختلفين'; return; }
+  const sections = all ? allSectionsForGrade(gid) : [state[gid].section];
+  if(!confirm(`سيتم استبدال بيانات ${LESSONS[to]} ببيانات ${LESSONS[from]} في ${all ? 'كل شعب هذا الصف' : state[gid].section}. هل أنتِ متأكدة؟`)) return;
+  out.style.color = 'var(--ink-soft)';
+  out.textContent = 'جارٍ النسخ...';
+  await flushSave(gid);
+  let copied = 0, skipped = [];
+  for(const section of sections){
+    await migrateLegacyWeeklyData(gid, section);
+    const mem = state[gid].recordsBySection;
+    const src = mem[`${section}|${from}`] || await cloudGet(weekRecordKey(gid, section, from));
+    if(!src || !src.date){ skipped.push(section); continue; } // الأسبوع المصدر لم يُستخدم في هذه الشعبة
+    const existing = mem[`${section}|${to}`] || await cloudGet(weekRecordKey(gid, section, to));
+    const copy = makeWeekCopy(src, existing);
+    await cloudSet(weekRecordKey(gid, section, to), copy);
+    mem[`${section}|${to}`] = copy;
+    copied++;
+  }
+  if(state[gid].lessonTitles[from]){
+    state[gid].lessonTitles[to] = state[gid].lessonTitles[from];
+    await cloudSet(lessonTitlesKey(gid), state[gid].lessonTitles);
+  }
+  renderTable(gid);
+  syncHeaderControls(gid);
+  out.style.color = copied ? 'var(--present)' : 'var(--absent)';
+  out.textContent = copied
+    ? `✅ تم النسخ في ${copied} شعبة.` + (skipped.length ? ` تخطّيتُ (لا بيانات في ${LESSONS[from]}): ${skipped.join('، ')}` : '')
+    : `لا توجد بيانات في ${LESSONS[from]} لنسخها.`;
+}
+
 function openImportModal(gid){
   importTargetGrade = gid;
   document.getElementById('importText').value = '';
@@ -2185,6 +2365,341 @@ document.getElementById('statScope').addEventListener('change', e=>{
 // =========================================================
 // الإقلاع
 // =========================================================
+
+// =========================================================
+// الاختيار العشوائي للطالبات (عجلة الحظ) — الأسماء من كشف الشعبة المفتوحة
+// =========================================================
+(function(){
+  var $ = function(i){ return document.getElementById(i); };
+  var pk = { gid:null, section:'', picked:[], busy:false, rot:0, W:0, H:0, lastWin:'' };
+  var COLS = ["#ffe34d","#9fd8f0","#5cc45e","#2f8de0","#ef3b36","#ff9f1c"], TOP = 40, BOT = 8;
+  var voiceOn = true, pitchV = 1.6, pickV = '';
+  try{ voiceOn = localStorage.getItem('pk_v') !== '0'; pickV = localStorage.getItem('pk_vn') || ''; pitchV = parseFloat(localStorage.getItem('pk_p')) || 1.6; }catch(e){}
+  var cw = $('pkWheel');
+  function pkKey(){ return 'picker:' + pk.gid + ':' + pk.section; }
+  function roster(){ return state[pk.gid].rosterBySection[pk.section] || []; }
+  function candidates(){
+    var r = roster(), day = currentDay(pk.gid), skip = $('pkSkip').checked, out = [];
+    r.forEach(function(n,i){
+      if(!(n||'').trim()) return;
+      if(skip && day.attendance && day.attendance[i]==='absent') return;
+      out.push(i);
+    });
+    return out;
+  }
+  function left(){ return candidates().filter(function(i){ return pk.picked.indexOf(i) < 0; }); }
+  function rnd(n){ var a = new Uint32Array(1); crypto.getRandomValues(a); return a[0] % n; }
+  function savePicked(){ cloudSet(pkKey(), pk.picked); }
+
+  function render(){
+    var r = left(), total = candidates().length;
+    drawWheel();
+    $('pkGo').disabled = pk.busy || !r.length;
+    if(!pk.busy){
+      $('pkLabel').textContent = !total ? 'لا توجد أسماء في هذه الشعبة — استوردي الأسماء أولاً' :
+        r.length ? 'اضغطي على العجلة لتدور، المتبقيات: ' + r.length + ' من ' + total : 'انتهت الجولة، الكل أخذ دوره';
+    }
+    var done = pk.picked.filter(function(i){ return (roster()[i]||'').trim(); });
+    $('pkDone').innerHTML = done.length
+      ? '<div style="font-weight:700;margin-bottom:4px;">تم اختيارهن في هذه الجولة (' + done.length + '):</div>' + done.map(function(i){ return '<b>' + escapeHtml(roster()[i]) + '</b>'; }).join('')
+      : '<span style="color:var(--mute)">لم تُختر أي طالبة بعد في هذه الجولة</span>';
+  }
+
+  function sizeWheel(){
+    var s = Math.min($('pkWw').clientWidth || 340, 390), d = window.devicePixelRatio || 1;
+    pk.W = s; pk.H = TOP + s + BOT;
+    cw.width = s*d; cw.height = pk.H*d; cw.style.width = s + 'px'; cw.style.height = pk.H + 'px';
+    drawWheel();
+  }
+  function drawWheel(){
+    var W = pk.W, H = pk.H; if(!W) return;
+    var g = cw.getContext('2d'), d = cw.width/W, R = W/2-8, Rs = R-16, idxs = left(), n = idxs.length, i, P = 2*Math.PI, rot = pk.rot, r = roster();
+    var names = idxs.map(function(k){ return r[k]; });
+    g.setTransform(d,0,0,d,0,0); g.clearRect(0,0,W,H); g.translate(W/2, TOP+W/2);
+    if(!n){
+      g.beginPath(); g.arc(0,0,R-4,0,P); g.fillStyle = '#3a2f8a'; g.fill();
+      g.fillStyle = '#fff'; g.font = '700 24px Tajawal,sans-serif'; g.textAlign = 'center';
+      g.fillText(candidates().length ? 'انتهت الجولة' : 'لا توجد أسماء', 0, 8); return;
+    }
+    var seg = P/n;
+    g.save(); g.rotate(rot);
+    for(i=0;i<n;i++){
+      var ci = i%6; if(n>1 && i===n-1 && ci===0) ci = 2;
+      g.beginPath(); g.moveTo(0,0); g.arc(0,0,R-4,i*seg,(i+1)*seg); g.closePath();
+      g.fillStyle = COLS[ci]; g.fill(); g.lineWidth = 1; g.strokeStyle = 'rgba(0,0,0,.3)'; g.stroke();
+      g.save(); g.rotate((i+.5)*seg);
+      var t = names[i].split(' ')[0], fs = Math.min(20, Math.max(9, Rs*seg*.42));
+      g.font = '700 ' + fs + 'px Tajawal,Tahoma,sans-serif';
+      while(g.measureText(t).width > Rs*.6 && fs > 8){ fs--; g.font = '700 ' + fs + 'px Tajawal,Tahoma,sans-serif'; }
+      g.textAlign = 'right'; g.textBaseline = 'middle'; g.direction = 'rtl'; g.lineJoin = 'round';
+      g.lineWidth = 3.5; g.strokeStyle = 'rgba(255,255,255,.9)'; g.strokeText(t, Rs-12, 0);
+      g.fillStyle = '#111'; g.fillText(t, Rs-12, 0); g.restore();
+    }
+    g.lineCap = 'round';
+    for(i=0;i<n;i++){
+      g.save(); g.rotate(i*seg); g.beginPath(); g.moveTo(Rs-1,0); g.lineTo(Rs+6,0);
+      g.lineWidth = 9; g.strokeStyle = '#9a7400'; g.stroke(); g.lineWidth = 6; g.strokeStyle = '#ffd23f'; g.stroke(); g.restore();
+    }
+    g.restore();
+    g.beginPath(); g.arc(0,0,R-4,0,P); g.lineWidth = 2; g.strokeStyle = 'rgba(0,0,0,.35)'; g.stroke();
+    var rr = [30,23,16,9], cc = ['#e5322d','#fff','#e5322d','#fff'];
+    for(i=0;i<4;i++){ g.beginPath(); g.arc(0,0,rr[i],0,P); g.fillStyle = cc[i]; g.fill(); }
+    g.beginPath(); g.arc(0,0,30,0,P); g.lineWidth = 2; g.strokeStyle = '#7a1210'; g.stroke();
+    var bg = g.createRadialGradient(-2,-2,1,0,0,6); bg.addColorStop(0,'#fff'); bg.addColorStop(1,'#8a8f96');
+    g.beginPath(); g.arc(0,0,6,0,P); g.fillStyle = bg; g.fill();
+    var tilt = 0;
+    if(n>1){ var w = Math.min(.09, seg*.12);
+      for(i=0;i<n;i++){ var a = ((i*seg+rot+Math.PI/2)%P+P)%P; if(a>Math.PI) a -= P; if(a<0 && a>-w) tilt = -.5*(a+w)/w; } }
+    g.lineCap = 'round'; g.lineJoin = 'round';
+    g.beginPath(); g.moveTo(0,-R-26); g.bezierCurveTo(40,-R-44,76,-R-32,72,-R+8);
+    g.lineWidth = 10; g.strokeStyle = '#161616'; g.stroke();
+    g.save(); g.translate(0,-R-26); g.rotate(tilt);
+    g.beginPath(); g.moveTo(-6,0); g.lineTo(6,0); g.lineTo(3.5,40); g.lineTo(0,50); g.lineTo(-3.5,40); g.closePath();
+    g.fillStyle = '#e5322d'; g.fill(); g.lineWidth = 1.5; g.strokeStyle = '#7a1210'; g.stroke();
+    g.beginPath(); g.arc(0,-2,9,0,P); g.fillStyle = '#ff4a44'; g.fill(); g.stroke();
+    g.restore();
+  }
+  function spinTo(idx, n, fast, done){
+    var P = 2*Math.PI, seg = P/n, c = (idx+.5)*seg + (Math.random()-.5)*seg*.7;
+    var cur = ((pk.rot%P)+P)%P, tn = ((-Math.PI/2-c)%P+P)%P;
+    var delta = (((tn-cur)%P)+P)%P + (fast ? 0 : P*(6+rnd(3))), start = pk.rot, t0 = performance.now(), D = fast ? 300 : 5200;
+    (function f(now){
+      var p = Math.min(1,(now-t0)/D), e = 1-Math.pow(1-p,4);
+      pk.rot = start + delta*e; drawWheel();
+      if(p<1) requestAnimationFrame(f); else { pk.rot = pk.rot%P; done(); }
+    })(t0);
+  }
+
+  // ---------- النطق بالاسم ----------
+var FEM=/noura|nora|salma|zariyah|hoda|huda|fatima|laila|layla|amina|reem|rana|mariam|maryam|sana|hamida|zeina|dalal|mona|nada|sara|samantha|karen|zira|hazel|susan|نورة|سلمى|ليلى|مريم|هدى|فاطمة|زارية/i;
+var MALE=/maged|majed|tarik|tareq|hamed|shakir|fahed|naayf|nayef|bassel|taim|ismail|abdullah|saleem|jamal|omar|hamdan|ahmed|ماجد|طارق|حامد|شاكر|فهد|خالد/i;
+var TS={"فاطمة":"فَاطِمَة","نورة":"نُورَة","نوره":"نُورَة","سارة":"سَارَة","مريم":"مَرْيَم","هدى":"هُدَى","دانة":"دَانَة","جنى":"جَنَى","لين":"لِين","ريم":"رِيم","شهد":"شَهْد","العنود":"العَنُود","الجوهرة":"الجَوْهَرَة","حصة":"حِصَّة","منيرة":"مُنِيرَة","مزنة":"مُزْنَة","بدور":"بُدُور","غلا":"غَلَا","دلال":"دَلَال","هند":"هِنْد","رهف":"رَهَف","تالا":"تَالَا","ملك":"مَلَك","لمى":"لَمَى","أمل":"أَمَل","أسيل":"أَسِيل","آية":"آيَة","أروى":"أَرْوَى","عائشة":"عَائِشَة","خديجة":"خَدِيجَة","زينب":"زَيْنَب","رقية":"رُقَيَّة","سلمى":"سَلْمَى","ليلى":"لَيْلَى","سلوى":"سَلْوَى","رنا":"رَنَا","رزان":"رَزَان","جود":"جُود","جوري":"جُورِي","ريماس":"رِيمَاس","لجين":"لُجَيْن","غدير":"غَدِير","وعد":"وَعْد","شيماء":"شَيْمَاء","إسراء":"إِسْرَاء","اسراء":"إِسْرَاء","أسماء":"أَسْمَاء","اسماء":"أَسْمَاء","حنان":"حَنَان","هبة":"هِبَة","روان":"رَوَان","سمر":"سَمَر","منال":"مَنَال","إيمان":"إِيمَان","ايمان":"إِيمَان","مها":"مَهَا","دعاء":"دُعَاء","شروق":"شُرُوق","بشاير":"بَشَائِر","بشائر":"بَشَائِر","فرح":"فَرَح","جنان":"جِنَان","لطيفة":"لَطِيفَة","وفاء":"وَفَاء","نوف":"نُوف","ديما":"دِيمَا","عهود":"عُهُود","لولوة":"لُؤْلُؤَة","ريناد":"رِينَاد","سديم":"سَدِيم","يارا":"يَارَا","جميلة":"جَمِيلَة","فجر":"فَجْر"};
+var TM={"محمد":"مُحَمَّد","أحمد":"أَحْمَد","احمد":"أَحْمَد","عبدالله":"عَبْدُ الله","عبدالرحمن":"عَبْدُ الرَّحْمَن","عبدالعزيز":"عَبْدُ العَزِيز","خالد":"خَالِد","فهد":"فَهْد","سالم":"سَالِم","ناصر":"نَاصِر","فيصل":"فَيْصَل","سعد":"سَعْد","علي":"عَلِي","حسين":"حُسَيْن","حسن":"حَسَن","يوسف":"يُوسُف","إبراهيم":"إِبْرَاهِيم","ابراهيم":"إِبْرَاهِيم","عمر":"عُمَر","عثمان":"عُثْمَان","مبارك":"مُبَارَك","جاسم":"جَاسِم","بدر":"بَدْر","راشد":"رَاشِد","صالح":"صَالِح","سلطان":"سُلْطَان","نايف":"نَايِف","مشعل":"مِشْعَل","عادل":"عَادِل","ماجد":"مَاجِد","طارق":"طَارِق","وليد":"وَلِيد","محمود":"مَحْمُود","مصطفى":"مُصْطَفَى","إسماعيل":"إِسْمَاعِيل","اسماعيل":"إِسْمَاعِيل","هاني":"هَانِي","سعود":"سُعُود","حمد":"حَمَد","عيسى":"عِيسَى","موسى":"مُوسَى","صباح":"صَبَاح","نواف":"نَوَّاف","أنور":"أَنْوَر","منصور":"مَنْصُور"};
+function tok(w,i){
+  var t=w[i];if(!t)return["",i];
+  if(/^(عبد|أم|ام|بنت|آل)$/.test(t)&&w[i+1])return[t+" "+w[i+1],i+2];
+  return[t,i+1];
+}
+function dia(t){
+  if(/[\u064B-\u0652]/.test(t))return t;
+  return TS[t]||TM[t]||t;
+}
+function say(full){
+  var w=full.replace(/\u0640/g,"").trim().split(/\s+/),a=tok(w,0),b=tok(w,a[1]);
+  return dia(a[0])+(b[0]?" "+dia(b[0]):"");
+}
+
+  function arV(){ return ('speechSynthesis' in window) ? speechSynthesis.getVoices().filter(function(v){ return /^ar/i.test(v.lang); }) : []; }
+  function bestVoice(){
+    var vs = arV(), i; if(!vs.length) return null;
+    if(pickV) for(i=0;i<vs.length;i++) if(vs[i].name===pickV) return vs[i];
+    var best = null, bs = -99;
+    vs.forEach(function(v){ var s = 0;
+      if(FEM.test(v.name)) s += 10; if(MALE.test(v.name)) s -= 10;
+      if(/ar[-_]KW/i.test(v.lang)) s += 3; if(/natural|online/i.test(v.name)) s += 2;
+      if(s>bs){ bs = s; best = v; } });
+    return best;
+  }
+  function fillVoices(){
+    var vs = arV(), sel = $('pkVsel'), h = '<option value="">تلقائي (صوت نسائي)</option>';
+    vs.forEach(function(v){ h += '<option value="' + escapeHtml(v.name) + '">' + escapeHtml(v.name) + ' (' + escapeHtml(v.lang) + ')</option>'; });
+    sel.innerHTML = h; sel.value = pickV; if(sel.value !== pickV) sel.value = '';
+  }
+  function speak(t){
+    if(!('speechSynthesis' in window) || !t) return;
+    var ss = speechSynthesis; ss.cancel();
+    var u = new SpeechSynthesisUtterance(t), v = bestVoice();
+    if(v){ u.voice = v; u.lang = v.lang; } else { u.lang = 'ar-SA'; }
+    u.rate = .8; u.pitch = (v && FEM.test(v.name)) ? 1.05 : pitchV; u.volume = 1; ss.speak(u);
+    return !!v;
+  }
+  function speakName(full){ return speak(say(full)); }
+  function paintSnd(){ $('pkSnd').textContent = 'النطق بالاسم: ' + (voiceOn ? 'يعمل' : 'متوقف'); $('pkSnd').setAttribute('aria-pressed', voiceOn); }
+  if('speechSynthesis' in window) speechSynthesis.onvoiceschanged = fillVoices;
+  $('pkVsel').onchange = function(){ pickV = this.value; try{ localStorage.setItem('pk_vn', pickV); }catch(e){} speak(say('نورة')); };
+  $('pkPit').value = pitchV;
+  $('pkPit').oninput = function(){ pitchV = parseFloat(this.value); try{ localStorage.setItem('pk_p', pitchV); }catch(e){} };
+  $('pkPit').onchange = function(){ speak(say('نورة')); };
+  $('pkSnd').onclick = function(){
+    voiceOn = !voiceOn; try{ localStorage.setItem('pk_v', voiceOn ? '1' : '0'); }catch(e){}
+    paintSnd(); if(voiceOn) speak('تم تشغيل النطق'); else if('speechSynthesis' in window) speechSynthesis.cancel();
+  };
+  $('pkAgain').onclick = function(){ if(pk.lastWin) speakName(pk.lastWin); };
+
+  function boom(){
+    var c = $('pkCv'), x = c.getContext('2d'); c.width = innerWidth; c.height = innerHeight;
+    var col = ['#ff4f87','#ffc23c','#18b98d','#7a5cff','#ffffff'], p = [];
+    for(var k=0;k<160;k++) p.push({ x:c.width/2, y:c.height*.35, vx:(Math.random()-.5)*16, vy:-Math.random()*14-2, s:5+Math.random()*7, r:Math.random()*6, c:col[k%5] });
+    var t = 0;
+    (function f(){
+      x.clearRect(0,0,c.width,c.height);
+      p.forEach(function(q){ q.vy += .35; q.x += q.vx; q.y += q.vy; q.r += .2; x.save(); x.translate(q.x,q.y); x.rotate(q.r); x.fillStyle = q.c; x.fillRect(-q.s/2,-q.s/2,q.s,q.s*.6); x.restore(); });
+      if(++t<130) requestAnimationFrame(f); else x.clearRect(0,0,c.width,c.height);
+    })();
+  }
+
+  $('pkGo').onclick = function(){
+    var r = left(); if(pk.busy || !r.length) return;
+    if(voiceOn && 'speechSynthesis' in window){ try{ speechSynthesis.speak(new SpeechSynthesisUtterance('')); }catch(e){} }
+    pk.busy = true; $('pkGo').disabled = true; $('pkMsg').textContent = ''; $('pkLabel').textContent = 'الحظ يدور...';
+    var winIdx = r[rnd(r.length)], el = $('pkName'), fast = matchMedia('(prefers-reduced-motion:reduce)').matches;
+    el.className = 'pk-name'; el.textContent = '؟؟؟';
+    spinTo(r.indexOf(winIdx), r.length, fast, function(){
+      var win = roster()[winIdx];
+      el.className = 'pk-name win'; el.textContent = win;
+      pk.picked.push(winIdx); savePicked(); pk.busy = false;
+      $('pkLabel').textContent = 'مبروك، الطالبة المحظوظة هي';
+      $('pkMsg').textContent = left().length ? 'بقي ' + left().length + ' طالبة في الجولة' : 'كانت هذه آخر طالبة!';
+      render(); if(!fast) boom();
+      pk.lastWin = win;
+      if(voiceOn){ var ok = speakName(win); if(ok === false) $('pkMsg').textContent += ' (لا يوجد صوت عربي على هذا الجهاز)'; }
+    });
+  };
+  cw.addEventListener('click', function(){ var b = $('pkGo'); if(!b.disabled) b.click(); });
+  cw.addEventListener('keydown', function(e){ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); var b = $('pkGo'); if(!b.disabled) b.click(); } });
+  $('pkReset').onclick = function(){
+    if(pk.busy) return; pk.picked = []; savePicked();
+    $('pkName').className = 'pk-name'; $('pkName').textContent = '؟؟؟'; $('pkMsg').textContent = 'بدأت جولة جديدة'; render();
+  };
+  $('pkSkip').onchange = function(){ if(!pk.busy) render(); };
+  addEventListener('resize', function(){ if($('pkOverlay').classList.contains('open')) sizeWheel(); });
+  addEventListener('keydown', function(e){ if(e.key==='Escape' && $('pkOverlay').classList.contains('open')) window.closePicker(); });
+
+  window.openPicker = async function(gid){
+    await flushSave(gid);
+    pk.gid = gid; pk.section = state[gid].section; pk.busy = false; pk.rot = 0; pk.lastWin = '';
+    var saved = await cloudGet(pkKey());
+    pk.picked = Array.isArray(saved) ? saved : [];
+    var gname = (GRADES.find(function(g){ return g.id===gid; }) || {}).name || '';
+    $('pkChip').textContent = gname + ' — ' + pk.section;
+    $('pkName').className = 'pk-name'; $('pkName').textContent = '؟؟؟'; $('pkMsg').textContent = '';
+    $('pkOverlay').classList.add('open'); document.body.style.overflow = 'hidden';
+    paintSnd(); fillVoices(); sizeWheel(); render();
+    if('speechSynthesis' in window){ speechSynthesis.getVoices(); setTimeout(fillVoices, 600); }
+  };
+  window.closePicker = function(){
+    $('pkOverlay').classList.remove('open'); document.body.style.overflow = '';
+    if('speechSynthesis' in window) speechSynthesis.cancel();
+  };
+})();
+
+// =========================================================
+// شهادات نجمة الحصة
+// =========================================================
+let certGrade = null;
+function openCertModal(gid){
+  certGrade = gid;
+  fillSelect('certWeek', [{v:'all', l:'كل الأسابيع'}].concat(LESSONS.map((l,i)=>({v:i, l}))));
+  document.getElementById('certWeek').value = 'all';
+  document.getElementById('certRanks').value = 'all';
+  document.getElementById('certResult').textContent = '';
+  document.getElementById('certModal').classList.add('open');
+}
+function closeCertModal(){ document.getElementById('certModal').classList.remove('open'); }
+
+function buildCertificatesHtml(certs, ctx){
+  const rankText = ['المركز الأول','المركز الثاني','المركز الثالث'];
+  const dateStr = formatDateDMY(todayStr());
+  const pages = certs.map(c=>{
+    const name = ctx.roster[c.idx];
+    const title = ctx.titles[c.week];
+    const fire = countBadges(c.rec, c.idx, '🔥');
+    return `<section class="cert"><div class="frame"><div class="inner">
+      <div class="head">
+        <div class="logo logo-s"></div>
+        <div class="school">ثانوية سلوى للبنات<small>قسم الحاسوب — المعلمة: أ. غادة دياب</small></div>
+        <div class="logo logo-d"></div>
+      </div>
+      <div class="mid">
+        <div class="star">🌟</div>
+        <h1>شهادة تقدير</h1>
+        <div class="sub">نجمة الحصة — ${rankText[c.pos] || ''}</div>
+        <p class="line">تتشرف معلمة مادة الحاسوب بتقديم هذه الشهادة للطالبة المتميزة</p>
+        <div class="name">${escapeHtml(name)}</div>
+        <p class="line">${escapeHtml(ctx.gradeName)} — ${escapeHtml(ctx.section)}</p>
+        <p class="body">وذلك لحصولها على لقب <b>«نجمة الحصة»</b> في <b>${LESSONS[c.week]}</b>${title ? ' — درس: <b>' + escapeHtml(title) + '</b>' : ''}${c.rec.date ? ' — بتاريخ <b>' + formatDateDMY(c.rec.date) + '</b>' : ''}،
+          ${fire ? 'بعد أن سجّلت <b>' + fire + '</b> من رموز التفاعل القوي 🔥، ' : ''}تقديراً لمشاركتها المتميزة وتفاعلها الإيجابي، ومتمنين لها دوام التوفيق والنجاح.</p>
+      </div>
+      <div class="sigs">
+        <div>معلمة المادة<br><b>أ. غادة دياب</b><span></span></div>
+        <div class="seal">تاريخ الإصدار<br>${dateStr}</div>
+      </div>
+    </div></div></section>`;
+  }).join('');
+  return `<!DOCTYPE html>
+<html lang="ar" dir="rtl"><head><meta charset="UTF-8">
+<title>شهادات نجمة الحصة — ${escapeHtml(ctx.gradeName)} — ${escapeHtml(ctx.section)}</title>
+<link href="https://fonts.googleapis.com/css2?family=Lalezar&family=Almarai:wght@700;800&family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  @page{ size:A4 landscape; margin:0; }
+  *{ box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  body{ margin:0; font-family:'Tajawal',Arial,sans-serif; color:#1B1F3B; background:#e8e4df; direction:rtl; }
+  .logo-s{ background-image:url(data:image/jpeg;base64,${LOGOS.school}); }
+  .logo-d{ background-image:url(data:image/jpeg;base64,${LOGOS.dept}); }
+  .no-print{ position:sticky; top:0; z-index:5; background:#1B1F3B; color:#fff; padding:10px 16px; display:flex; gap:12px; align-items:center; }
+  .no-print button{ font-family:inherit; font-size:14px; font-weight:700; padding:8px 16px; border:0; border-radius:8px; background:#C9982F; color:#1B1F3B; cursor:pointer; }
+  .cert{ width:297mm; height:209mm; margin:12px auto; background:#fff; padding:8mm; page-break-after:always; break-after:page; overflow:hidden; }
+  .cert:last-of-type{ page-break-after:auto; break-after:auto; }
+  .frame{ height:100%; border:2.2mm double #C9982F; padding:2.2mm; }
+  .inner{ height:100%; border:0.5mm solid #B23A5C; padding:6mm 14mm 6mm; display:flex; flex-direction:column; justify-content:space-between;
+    background:radial-gradient(circle at 50% 38%, #fffaf0 0%, #fff 62%); }
+  .head{ display:flex; align-items:center; justify-content:space-between; }
+  .logo{ width:24mm; height:24mm; background-size:contain; background-repeat:no-repeat; background-position:center; }
+  .school{ text-align:center; font-family:'Almarai',sans-serif; font-weight:800; font-size:19pt; color:#1B1F3B; }
+  .school small{ display:block; font-weight:700; font-size:11.5pt; color:#4A4E6B; margin-top:2px; }
+  .mid{ text-align:center; }
+  .star{ font-size:34pt; line-height:1; }
+  h1{ font-family:'Lalezar','Almarai',sans-serif; font-weight:400; font-size:50pt; line-height:1.25; margin:2px 0 6px; color:#B23A5C; }
+  .sub{ display:inline-block; font-family:'Almarai',sans-serif; font-weight:800; font-size:15pt; color:#fff; background:#1B1F3B; padding:3px 22px; border-radius:20px; margin-bottom:8px; }
+  p.line{ font-size:14pt; margin:5px 0; color:#4A4E6B; }
+  .name{ font-family:'Lalezar','Almarai',sans-serif; font-size:38pt; line-height:1.25; color:#1B1F3B; border-bottom:0.6mm solid #C9982F; display:inline-block; padding:0 14mm; margin:4px 0 6px; }
+  p.body{ font-size:14.5pt; line-height:1.85; margin:8px auto 0; max-width:225mm; }
+  p.body b{ color:#B23A5C; }
+  .sigs{ display:flex; justify-content:space-around; align-items:flex-end; font-size:12pt; text-align:center; gap:10mm; }
+  .sigs > div{ flex:0 1 70mm; }
+  .sigs span{ display:block; border-top:0.4mm solid #1B1F3B; margin:9mm 6mm 0; }
+  .sigs .seal{ flex:0 0 38mm; border:0.5mm dashed #C9982F; border-radius:50%; width:30mm; height:30mm; display:flex; align-items:center; justify-content:center; font-size:9.5pt; color:#8A6412; line-height:1.5; }
+  @media print{ body{ background:#fff; } .no-print{ display:none; } .cert{ margin:0; } }
+</style></head>
+<body>
+  <div class="no-print"><button onclick="window.print()">🖨️ طباعة الشهادات (${certs.length})</button><span>كل شهادة في صفحة A4 أفقية — يمكنك اختيار "حفظ كـ PDF" من نافذة الطباعة.</span></div>
+  ${pages}
+</body></html>`;
+}
+
+async function showCertificates(){
+  const gid = certGrade, section = state[gid].section;
+  const out = document.getElementById('certResult');
+  out.style.color = 'var(--ink-soft)'; out.textContent = 'جارٍ التجهيز...';
+  await flushSave(gid);
+  const weekSel = document.getElementById('certWeek').value;
+  const ranks = document.getElementById('certRanks').value;
+  const roster = state[gid].rosterBySection[section] || [];
+  const certs = [];
+  for(let w=0; w<LESSONS.length; w++){
+    if(weekSel !== 'all' && Number(weekSel) !== w) continue;
+    const rec = state[gid].recordsBySection[`${section}|${w}`] || await cloudGet(weekRecordKey(gid, section, w));
+    if(!rec || !Array.isArray(rec.stars)) continue;
+    rec.stars.forEach((idx, pos)=>{
+      if(ranks==='first' && pos>0) return;
+      if(!(roster[idx] || '').trim()) return;
+      certs.push({ week:w, rec, idx, pos });
+    });
+  }
+  if(!certs.length){
+    out.style.color = 'var(--absent)';
+    out.textContent = 'لا توجد نجمة حصة مسجّلة في هذا الاختيار. افتحي الأسبوع واضغطي "اعرفي المتميزات" أولاً.';
+    return;
+  }
+  const win = window.open('', '_blank');
+  if(!win){ out.style.color = 'var(--absent)'; out.textContent = 'منع المتصفح فتح النافذة — اسمحي بالنوافذ المنبثقة لهذا الموقع ثم أعيدي المحاولة'; return; }
+  const gradeName = (GRADES.find(g=> g.id===gid) || {}).name || '';
+  win.document.write(buildCertificatesHtml(certs, { gradeName, section, roster, titles: state[gid].lessonTitles || {} }));
+  win.document.close();
+  out.style.color = 'var(--present)';
+  out.textContent = `✅ تم تجهيز ${certs.length} شهادة في نافذة جديدة.`;
+}
+
 const LOGOS = JSON.parse(document.getElementById('logo-data').textContent);
 document.getElementById('schoolLogo').src = 'data:image/jpeg;base64,' + LOGOS.school;
 
